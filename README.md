@@ -78,7 +78,3 @@ Abre tu navegador y entra a:
 Home del Backend: http://127.0.0.1:8000/
 
 Panel de Administración: http://127.0.0.1:8000/admin/
-
-```
-
-```
