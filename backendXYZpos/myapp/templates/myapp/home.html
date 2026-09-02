@@ -1,0 +1,167 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>backendXYZpos - Panel de Control</title>
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+  </head>
+  <body
+    class="bg-slate-900 text-slate-100 min-h-screen flex flex-col justify-between selection:bg-indigo-500 selection:text-white"
+  >
+    <!-- Header / Navbar -->
+    <header
+      class="border-b border-slate-800 bg-slate-900/80 backdrop-blur sticky top-0 z-50"
+    >
+      <div
+        class="max-w-7xl mx-auto px-6 h-16 flex items-center justify-between"
+      >
+        <div class="flex items-center space-x-3">
+          <div
+            class="bg-indigo-600 p-2 rounded-xl shadow-lg shadow-indigo-600/30"
+          >
+            <svg
+              class="w-6 h-6 text-white"
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+            >
+              <path
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                stroke-width="2"
+                d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4"
+              ></path>
+            </svg>
+          </div>
+          <span
+            class="font-bold text-xl tracking-wide bg-gradient-to-r from-white to-slate-400 bg-clip-text text-transparent"
+            >backendXYZpos</span
+          >
+        </div>
+        <div class="flex items-center space-x-2">
+          <span class="flex h-3 w-3 relative">
+            <span
+              class="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"
+            ></span>
+            <span
+              class="relative inline-flex rounded-full h-3 w-3 bg-emerald-500"
+            ></span>
+          </span>
+          <span
+            class="text-xs font-medium text-emerald-400 tracking-wide uppercase"
+            >Sistema Activo</span
+          >
+        </div>
+      </div>
+    </header>
+
+    <!-- Main Content -->
+    <main class="max-w-7xl mx-auto px-6 py-16 w-full">
+      <div class="text-center max-w-3xl mx-auto space-y-6">
+        <span
+          class="px-3.5 py-1.5 text-xs font-semibold tracking-wider text-indigo-400 uppercase bg-indigo-500/10 border border-indigo-500/20 rounded-full"
+        >
+          API & Backend Core
+        </span>
+        <h1 class="text-4xl sm:text-6xl font-extrabold tracking-tight">
+          Bienvenido a
+          <span
+            class="bg-gradient-to-r from-indigo-400 to-purple-400 bg-clip-text text-transparent"
+            >XYZpos</span
+          >
+        </h1>
+        <p class="text-slate-400 text-lg leading-relaxed">
+          El núcleo del sistema de punto de venta está operando correctamente.
+          Desde aquí puedes gestionar rutas, endpoints de la API y herramientas
+          de administración.
+        </p>
+
+        <!-- Action Buttons -->
+        <div class="flex flex-wrap justify-center gap-4 pt-4">
+          <a
+            href="/admin/"
+            class="px-6 py-3 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-medium transition-all shadow-lg shadow-indigo-600/20 hover:shadow-indigo-600/40 flex items-center space-x-2"
+          >
+            <svg
+              class="w-5 h-5"
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+            >
+              <path
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                stroke-width="2"
+                d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"
+              ></path>
+              <path
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                stroke-width="2"
+                d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"
+              ></path>
+            </svg>
+            <span>Panel de Administración</span>
+          </a>
+        </div>
+      </div>
+
+      <!-- Cards Grid -->
+      <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mt-20">
+        <div
+          class="bg-slate-800/50 border border-slate-800 p-6 rounded-2xl hover:border-slate-700 transition-all"
+        >
+          <div
+            class="w-10 h-10 rounded-lg bg-indigo-500/10 border border-indigo-500/20 flex items-center justify-center text-indigo-400 mb-4 font-bold"
+          >
+            01
+          </div>
+          <h3 class="font-semibold text-lg text-white mb-2">
+            Django Framework
+          </h3>
+          <p class="text-slate-400 text-sm">
+            Estructura robusta y segura corriendo sobre Python con arquitectura
+            MTV.
+          </p>
+        </div>
+        <div
+          class="bg-slate-800/50 border border-slate-800 p-6 rounded-2xl hover:border-slate-700 transition-all"
+        >
+          <div
+            class="w-10 h-10 rounded-lg bg-purple-500/10 border border-purple-500/20 flex items-center justify-center text-purple-400 mb-4 font-bold"
+          >
+            02
+          </div>
+          <h3 class="font-semibold text-lg text-white mb-2">API Endpoints</h3>
+          <p class="text-slate-400 text-sm">
+            Preparado para escalar servicios REST y conectar con el frontend del
+            POS.
+          </p>
+        </div>
+        <div
+          class="bg-slate-800/50 border border-slate-800 p-6 rounded-2xl hover:border-slate-700 transition-all"
+        >
+          <div
+            class="w-10 h-10 rounded-lg bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center text-emerald-400 mb-4 font-bold"
+          >
+            03
+          </div>
+          <h3 class="font-semibold text-lg text-white mb-2">Base de Datos</h3>
+          <p class="text-slate-400 text-sm">
+            ORM integrado listo para sincronizar modelos de inventario, ventas y
+            usuarios.
+          </p>
+        </div>
+      </div>
+    </main>
+
+    <!-- Footer -->
+    <footer
+      class="border-t border-slate-800 py-6 text-center text-slate-500 text-sm"
+    >
+      <p>backendXYZpos &copy; 2026 - Desarrollado para Mini-proyecto PDS</p>
+    </footer>
+  </body>
+</html>
