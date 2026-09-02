@@ -23,12 +23,16 @@ cd backendXYZpos
 2. Crear y activar el entorno virtual
    En Windows (CMD / PowerShell):
 
+```bash
 python -m venv venv
 venv\Scripts\activate
+```
 
 3. Instalar las dependencias
 
+```bash
 pip install django psycopg2-binary pandas openpyxl django-import-export
+```
 
 4. Configuración de la Base de Datos
    El proyecto utiliza una base de datos centralizada en la nube. Verifica que tu archivo backendXYZpos/backendXYZpos/settings.py tenga el siguiente bloque de conexión con las credenciales compartidas:
@@ -52,15 +56,22 @@ DATABASES = {
 5. Sincronizar las migraciones
    Ejecuta el siguiente comando para conectar con la base de datos compartida:
 
+```bash
 python manage.py migrate
+```
 
 6. Crear tu propio superusuario (Opcional)
    Para poder entrar al panel de administración de Django con tus propias credenciales:
 
+```bash
 python manage.py createsuperuser
+```
 
 7. Ejecutar el servidor de desarrollo
-   python manage.py runserver
+
+```bash
+python manage.py runserver
+```
 
 Abre tu navegador y entra a:
 
