@@ -35,15 +35,15 @@
             </div>
             <nav class="mt-6 space-y-1">
                 <a href="#" class="flex items-center px-6 py-3 text-sm font-medium text-white sidebar-item bg-[#1a1a22] border-l-3 border-orange-500">📊 Dashboard General</a>
-                <a href="#" class="flex items-center px-6 py-3 text-sm font-medium text-gray-400 hover:text-white sidebar-item">📦 Inventario</a>
-                <a href="#" class="flex items-center px-6 py-3 text-sm font-medium text-gray-400 hover:text-white sidebar-item">💳 Transacciones</a>
+                <a href="{% url 'inventario' %}" class="flex items-center px-6 py-3 text-sm font-medium text-gray-400 hover:text-white sidebar-item">📦 Inventario</a>
+                <a href="{% url 'ventas_ui' %}" class="flex items-center px-6 py-3 text-sm font-medium text-gray-400 hover:text-white sidebar-item">💳 Transacciones</a>
                 <a href="#" class="flex items-center px-6 py-3 text-sm font-medium text-gray-400 hover:text-white sidebar-item">👥 Clientes</a>
             </nav>
         </div>
         <div class="p-6 border-t border-gray-800">
-            <button onclick="alert('Sesión cerrada')" class="w-full bg-gradient-to-r from-orange-600 to-amber-600 hover:from-orange-500 hover:to-amber-500 text-white font-medium py-2 px-4 rounded-lg transition shadow-lg text-sm">
+            <form method="post" action="{% url 'logout' %}">{% csrf_token %}<button class="w-full bg-gradient-to-r from-orange-600 to-amber-600 hover:from-orange-500 hover:to-amber-500 text-white font-medium py-2 px-4 rounded-lg transition shadow-lg text-sm">
                 LOG OUT
-            </button>
+            </button></form>
         </div>
     </aside>
 
@@ -52,9 +52,10 @@
         <!-- Top Navigation Bar -->
         <header class="h-16 bg-[#141419]/80 backdrop-blur border-b border-gray-800 flex items-center justify-between px-8 sticky top-0 z-10">
             <h2 class="text-lg font-semibold text-gray-200">Panel de Rendimiento</h2>
+            <nav class="md:hidden text-orange-400 text-sm"><a href="{% url 'inventario' %}">Inventario</a> · <a href="{% url 'ventas_ui' %}">Ventas</a></nav>
             <div class="flex items-center space-x-4">
                 <div class="text-right">
-                    <p class="text-sm font-medium text-white">Administrador</p>
+                    <p class="text-sm font-medium text-white">{{ request.user.username }}</p>
                     <p class="text-xs text-orange-400">Online</p>
                 </div>
                 <div class="w-10 h-10 rounded-full bg-gradient-to-tr from-orange-500 to-amber-500 flex items-center justify-center font-bold text-white shadow-md">
@@ -65,13 +66,16 @@
 
         <!-- Dashboard Body Content -->
         <div class="p-8 max-w-7xl mx-auto w-full space-y-8">
+            <p id="metrics-error" role="alert" class="text-red-400 hidden"></p>
+            <section id="daily-summary" class="glass-card p-5 rounded-xl whitespace-pre-line" aria-live="polite"></section>
+            <section class="glass-card p-5 rounded-xl"><h3>Ventas del día por vendedor</h3><ul id="seller-summary"></ul><h3 class="mt-4">Productos más vendidos hoy</h3><ul id="top-products"></ul></section>
             
             <!-- Cards Grid -->
             <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
                 <!-- Card 1 -->
                 <div class="glass-card p-6 rounded-2xl relative overflow-hidden">
                     <div class="absolute -right-6 -bottom-6 w-24 h-24 bg-orange-500/10 rounded-full blur-xl"></div>
-                    <p class="text-gray-400 text-xs uppercase tracking-wider font-semibold">Ingresos del Mes</p>
+                    <p class="text-gray-400 text-xs uppercase tracking-wider font-semibold">Ingresos netos del mes</p>
                     <h3 id="card-ingresos" class="text-3xl font-extrabold text-white mt-3">$0</h3>
                     <div class="mt-4 flex items-center text-xs text-emerald-400 font-medium">
                         <span>↑ Actualizado en tiempo real</span>
@@ -116,12 +120,17 @@
     <!-- Script de consumo de API y renderizado dinámico de Chart.js -->
     <script>
         fetch('/api/analytics/metrics/')
-            .then(response => response.json())
+            .then(response => { if (!response.ok) throw new Error('No se pudieron consultar los reportes.'); return response.json(); })
             .then(data => {
                 // Rellenar tarjetas principales
-                const ingresos = data.cards_summary.ingresos_mes;
+                const ingresos = Number(data.cards_summary.ingresos_mes);
                 const transacciones = data.cards_summary.transacciones_mes;
                 const meta = data.cards_summary.meta_progreso;
+                const daily = data.diario.resumen;
+                const money = value => value === null ? 'No disponible: costo histórico incompleto' : `$${Number(value).toLocaleString('es-CO', {minimumFractionDigits: 2})}`;
+                document.getElementById('daily-summary').textContent = `Hoy: ${daily.transacciones} ventas · ${daily.unidades_vendidas} unidades\nCobros: ${money(daily.ventas_brutas)} · Reembolsos: ${money(daily.reembolsos)} · Neto: ${money(daily.ingresos_netos)}\nCosto conocido: ${money(daily.costo_conocido)} · Utilidad sin impuestos: ${money(daily.utilidad_bruta)}`;
+                for (const row of data.diario.por_vendedor) { const li = document.createElement('li'); li.textContent = `${row.vendedor}: ${row.transacciones} ventas · ${money(row.ingresos_netos)} netos`; document.getElementById('seller-summary').append(li); }
+                for (const row of data.diario.productos_mas_vendidos) { const li = document.createElement('li'); li.textContent = `${row.nombre}: ${row.unidades} unidades vendidas`; document.getElementById('top-products').append(li); }
 
                 document.getElementById('card-ingresos').innerText = `$${ingresos.toLocaleString()}`;
                 document.getElementById('card-transacciones').innerText = transacciones;
@@ -135,7 +144,7 @@
                 // Configurar Gráfico con estilo moderno difuminado
                 const rawData = data.charts.line_chart_semana;
                 const labels = rawData.map(item => item.dia);
-                const values = rawData.map(item => item.ingreso);
+                const values = rawData.map(item => Number(item.ingreso));
 
                 const ctx = document.getElementById('salesChart').getContext('2d');
                 
@@ -192,7 +201,7 @@
                     }
                 });
             })
-            .catch(error => console.error('Error al cargar las métricas:', error));
+            .catch(error => { const box = document.getElementById('metrics-error'); box.textContent = error.message; box.classList.remove('hidden'); });
     </script>
 </body>
 </html>

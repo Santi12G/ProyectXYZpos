@@ -1,0 +1,41 @@
+<!doctype html>
+<html lang="es"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Inventario - XYZpos</title><script src="https://cdn.tailwindcss.com"></script></head>
+<body class="bg-[#0f0f13] text-slate-200 min-h-screen"><header class="bg-[#141419] border-b border-gray-800 px-8 py-4 flex justify-between items-center"><div><h1 class="text-xl font-bold text-orange-500">Inventario</h1><a class="text-sm text-gray-400" href="{% url 'dashboard_ui' %}">Volver al dashboard</a></div><a href="{% url 'producto_crear' %}" class="bg-orange-600 px-4 py-2 rounded-lg">Nuevo producto</a></header>
+<main class="p-4 md:p-8 overflow-x-auto"><label for="inventory-search">Buscar por nombre, SKU, código de barras o categoría</label><input id="inventory-search" type="search" class="block bg-slate-800 rounded p-3 my-4 w-full max-w-lg"><p id="inventory-count" aria-live="polite"></p><table class="w-full bg-[#1a1a22] border border-gray-800"><thead class="bg-[#24242d] text-left text-xs uppercase text-gray-400"><tr><th class="p-3">Imagen</th><th>SKU</th><th>Nombre</th><th>Categoría</th><th>Precio</th><th>Costo</th><th>Stock</th><th>Mínimo</th><th>Estado</th><th>Acciones</th></tr></thead><tbody id="inventory-rows">
+{% for p in productos %}<tr data-product data-search="{{ p.sku }} {{ p.barcode|default_if_none:'' }} {{ p.nombre }} {{ p.categoria|default_if_none:'' }}" class="border-t border-gray-800"><td class="p-3">{% if p.image_url %}<img src="{{ p.image_url }}" alt="{{ p.nombre }}" loading="lazy" referrerpolicy="no-referrer" class="w-12 h-12 rounded object-cover">{% else %}<span class="text-gray-600">Sin imagen</span>{% endif %}</td><td>{{ p.sku }}</td><td>{{ p.nombre }}</td><td>{{ p.categoria|default:'—' }}</td><td>${{ p.precio }}</td><td>{{ p.cost_price|default_if_none:'—' }}</td><td class="{% if p.stock_bajo %}text-red-400 font-bold{% endif %}">{{ p.stock }}</td><td>{{ p.min_stock }}</td><td>{% if p.disponible %}Activo{% else %}Inactivo{% endif %}</td><td><a class="text-orange-400" href="{% url 'producto_editar' p.pk %}">Editar</a></td></tr>{% empty %}<tr><td colspan="10" class="p-8 text-center text-gray-500">No hay productos registrados.</td></tr>{% endfor %}
+</tbody></table></main>
+<dialog id="product-modal" class="bg-[#1a1a22] text-white rounded-xl w-full max-w-3xl p-5"><button type="button" id="close-product" class="float-right">Cerrar</button><div id="product-content"></div></dialog>
+<script>
+const search = document.getElementById('inventory-search');
+const normalize = value => value.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+function filterProducts() { let visible = 0; for (const row of document.querySelectorAll('[data-product]')) { row.hidden = !normalize(row.dataset.search).includes(normalize(search.value)); if (!row.hidden) visible++; } document.getElementById('inventory-count').textContent = `${visible} productos`; }
+search.addEventListener('input', filterProducts); filterProducts();
+const modal = document.getElementById('product-modal'), content = document.getElementById('product-content');
+document.getElementById('close-product').onclick = () => modal.close();
+function installForm(html, url) {
+  const page = new DOMParser().parseFromString(html, 'text/html');
+  content.replaceChildren(page.querySelector('main'));
+  const form = content.querySelector('form'); form.action = url;
+  form.onsubmit = async event => {
+    event.preventDefault(); const submit = form.querySelector('button'); submit.disabled = true;
+    try {
+      const response = await fetch(url, {method:'POST', body:new FormData(form), headers:{'X-Requested-With':'XMLHttpRequest'}});
+      if (!response.ok) throw new Error('No fue posible guardar el producto.');
+      if (response.headers.get('Content-Type').includes('application/json')) {
+        const list = await fetch(window.location.href); if (!list.ok) throw new Error('Recarga el inventario para ver los cambios.');
+        const page = new DOMParser().parseFromString(await list.text(), 'text/html');
+        document.getElementById('inventory-rows').replaceChildren(...page.querySelector('#inventory-rows').childNodes);
+        modal.close(); filterProducts();
+      } else installForm(await response.text(), url);
+    } catch (error) { const message = document.createElement('p'); message.setAttribute('role','alert'); message.textContent = error.message; content.prepend(message); }
+    finally { submit.disabled = false; }
+  };
+}
+document.addEventListener('click', async event => {
+  const link = event.target.closest('a');
+  if (!link || !/\/inventario\/(nuevo\/|\d+\/editar\/)$/.test(link.pathname)) return;
+  event.preventDefault();
+  try { const response = await fetch(link.href); if (!response.ok) throw new Error(); installForm(await response.text(), link.href); modal.showModal(); }
+  catch { window.location.href = link.href; }
+});
+</script></body></html>

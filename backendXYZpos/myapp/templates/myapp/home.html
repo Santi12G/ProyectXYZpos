@@ -28,6 +28,7 @@
     </header>
 
     <!-- Main Content -->
+    {% if error_log or error_reg %}<p role="alert" class="text-red-300 text-center p-4">{{ error_log }} {{ error_reg }}</p>{% endif %}
     <main class="max-w-7xl mx-auto px-6 py-16 w-full">
       <div class="text-center max-w-3xl mx-auto space-y-6">
         <span class="px-3.5 py-1.5 text-xs font-semibold tracking-wider text-indigo-400 uppercase bg-indigo-500/10 border border-indigo-500/20 rounded-full">
