@@ -17,3 +17,11 @@ class Producto(models.Model):
 
     def __str__(self):
         return self.nombre
+    
+class Venta(models.Model):
+  total = models.DecimalField(max_digits=10, decimal_places=2)
+  created_at = models.DateTimeField(auto_now_add=True)
+  # Agrega los campos adicionales que necesites (cliente, items, etc.)
+
+  def __str__(self):
+    return f'Venta #{self.id} - Total: {self.total}'
