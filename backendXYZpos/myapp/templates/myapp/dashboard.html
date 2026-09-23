@@ -34,10 +34,25 @@
                 <p class="text-xs text-gray-500 uppercase tracking-widest mt-1">POS Admin Panel</p>
             </div>
             <nav class="mt-6 space-y-1">
-                <a href="#" class="flex items-center px-6 py-3 text-sm font-medium text-white sidebar-item bg-[#1a1a22] border-l-3 border-orange-500">📊 Dashboard General</a>
-                <a href="#" class="flex items-center px-6 py-3 text-sm font-medium text-gray-400 hover:text-white sidebar-item">📦 Inventario</a>
-                <a href="#" class="flex items-center px-6 py-3 text-sm font-medium text-gray-400 hover:text-white sidebar-item">💳 Transacciones</a>
-                <a href="#" class="flex items-center px-6 py-3 text-sm font-medium text-gray-400 hover:text-white sidebar-item">👥 Clientes</a>
+                <!-- Dashboard General -->
+                <a href="{% url 'dashboard_ui' %}" class="flex items-center px-6 py-3 text-sm font-medium text-white sidebar-item bg-[#1a1a22] border-l-3 border-orange-500">
+                    📊 Dashboard General
+                </a>
+                
+                <!-- Inventario -->
+                <a href="{% url 'inventario' %}" class="flex items-center px-6 py-3 text-sm font-medium text-gray-400 hover:text-white sidebar-item">
+                    📦 Inventario
+                </a>
+                
+                <!-- Transacciones / Ventas -->
+                <a href="{% url 'ventas_ui' %}" class="flex items-center px-6 py-3 text-sm font-medium text-gray-400 hover:text-white sidebar-item">
+                    💳 Transacciones
+                </a>
+                
+                <!-- Clientes (Si aún no tienes la vista creada, puedes dejar el '#' temporalmente) -->
+                <a href="#" class="flex items-center px-6 py-3 text-sm font-medium text-gray-400 hover:text-white sidebar-item">
+                    👥 Clientes
+                </a>
             </nav>
         </div>
         <div class="p-6 border-t border-gray-800">

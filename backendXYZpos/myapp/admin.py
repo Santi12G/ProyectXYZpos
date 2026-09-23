@@ -1,22 +1,23 @@
 from django.contrib import admin
-from import_export.admin import ImportExportModelAdmin
-from .models import Producto, Tarea
-from .models import Venta
+from .models import Categoria, Producto, Venta, Reembolso, ItemVenta, MovimientoInventario
+
+
+@admin.register(Producto)
+class ProductoAdmin(admin.ModelAdmin):
+    # Solo usamos campos reales de Producto
+    list_display = ('sku', 'nombre', 'categoria', 'precio', 'stock', 'disponible')
+    search_fields = ('sku', 'nombre')
 
 
 @admin.register(Venta)
 class VentaAdmin(admin.ModelAdmin):
-  list_display = (
-      'id',
-      'total',
-      'created_at',
-  )  # Campos que se verán en la tabla de la lista
-  search_fields = ('id',)  # Campos por los que podrás buscar
+    # Solo usamos campos reales de Venta
+    list_display = ('receipt_number', 'seller', 'status', 'total', 'created_at')
+    search_fields = ('receipt_number',)
 
-@admin.register(Producto)
-class ProductoAdmin(ImportExportModelAdmin):
-    list_display = ('nombre', 'precio', 'stock')
 
-@admin.register(Tarea)
-class TareaAdmin(ImportExportModelAdmin):
-    list_display = ('titulo', 'completada')
+# Registramos los demás modelos de forma sencilla
+admin.site.register(Categoria)
+admin.site.register(Reembolso)
+admin.site.register(ItemVenta)
+admin.site.register(MovimientoInventario)

@@ -1,115 +1,168 @@
-from datetime import datetime, timedelta
-from django.db.models import Count, Sum
+from datetime import timedelta
+from decimal import Decimal
+from django.contrib.auth import authenticate, login, logout
+from django.contrib.auth.decorators import login_required
+from django.contrib.auth.models import User
+from django.contrib.auth.password_validation import validate_password
+from django.core.exceptions import ValidationError
+from django.db import IntegrityError, transaction
+from django.http import JsonResponse
+from django.shortcuts import get_object_or_404, redirect, render
 from django.utils import timezone
+from django.utils.decorators import method_decorator
+from django.views import View
 from django.views.generic import TemplateView
 from rest_framework.decorators import action
 from rest_framework.response import Response
 from rest_framework.viewsets import ViewSet
-from .models import Venta
 
-from django.contrib.auth import authenticate, login
-from django.contrib.auth.models import User
-from django.shortcuts import redirect, render
-from django.views import View
+from .forms import ProductoForm
+from .models import PerfilUsuario, Producto, Venta
+from .permissions import EsAdministrador, admin_requerido, es_admin, exigir_usuario, rol_usuario
+from .reports import ESTADOS_VENDIDOS, montos_json, resumen_periodo
 
 
+
+# 1. API para las métricas del Dashboard (Se mantiene igual de funcional)
 class DashboardAnalyticsViewSet(ViewSet):
+    permission_classes = (EsAdministrador,)
 
-  @action(detail=False, methods=['get'])
-  def metrics(self, request):
-    hoy = timezone.now().date()
-    inicio_mes = hoy.replace(day=1)
+    @action(detail=False, methods=['get'])
+    def metrics(self, request):
+        hoy = timezone.localdate()
+        mes = resumen_periodo(hoy.replace(day=1), hoy)
+        dia = resumen_periodo(hoy, hoy)
+        semana = resumen_periodo(hoy - timedelta(days=6), hoy)
+        
+        por_dia = {fila['dia']: fila for fila in semana['por_fecha']}
+        grafico = []
+        for i in range(7):
+            fecha = str(hoy - timedelta(days=6 - i))
+            fila = por_dia.get(fecha, {})
+            grafico.append({
+                'dia': fecha, 
+                'ingreso': fila.get('ingresos_netos', Decimal('0')), 
+                'cantidad': fila.get('transacciones', 0)
+            })
+            
+        ingresos = mes['resumen']['ingresos_netos']
+        meta = max(Decimal('0'), min((ingresos / Decimal('5000000') * 100).quantize(Decimal('.1')), Decimal('100')))
+        
+        # AQUÍ ESTABA EL ERROR: Cambiamos -completed_at por -created_at
+        recent_activity = [
+            {'id': v.id, 'total': v.total, 'fecha': v.created_at}
+            for v in Venta.objects.filter(status__in=ESTADOS_VENDIDOS).order_by('-created_at')[:5]
+        ]
 
-    total_ingresos_mes = (
-        Venta.objects.filter(created_at__date__gte=inicio_mes).aggregate(
-            Sum('total')
-        )['total__sum']
-        or 0
-    )
+        return Response(montos_json({
+            'status': 'success',
+            'criterio': 'Eventos por created_at',
+            'cards_summary': {'ingresos_mes': ingresos, 'transacciones_mes': mes['resumen']['transacciones'], 'meta_progreso': meta},
+            'diario': dia, 
+            'mensual': mes,
+            'charts': {'line_chart_semana': grafico},
+            'recent_activity': recent_activity,
+        }))
 
-    total_transacciones = Venta.objects.filter(
-        created_at__date__gte=inicio_mes
-    ).count()
+# 2. Vistas normales protegidas para el Administrador
+@method_decorator(admin_requerido, name='dispatch')
+class DashboardTemplateView(TemplateView):
+    template_name = 'myapp/dashboard.html'
 
-    dias_atras = hoy - timedelta(days=7)
-    ventas_recientes = (
-        Venta.objects.filter(created_at__date__gte=dias_atras)
-        .extra(select={'dia': 'date(created_at)'})
-        .values('dia')
-        .annotate(ingreso=Sum('total'), cantidad=Count('id'))
-        .order_by('dia')
-    )
 
-    meta_mensual = 5000000
-    porcentaje_meta = (
-        min(round((float(total_ingresos_mes) / meta_mensual) * 100, 1), 100)
-        if meta_mensual > 0
-        else 0
-    )
+@admin_requerido
+def inventario(request):
+    productos = Producto.objects.select_related('categoria').all()
+    return render(request, 'myapp/inventario.html', {'productos': productos})
 
-    return Response({
-        'status': 'success',
-        'cards_summary': {
-            'ingresos_mes': float(total_ingresos_mes),
-            'transacciones_mes': total_transacciones,
-            'meta_progreso': porcentaje_meta,
-        },
-        'charts': {
-            'line_chart_semana': list(ventas_recientes),
-        },
-        'recent_activity': [
-            {
-                'id': v.id,
-                'total': float(v.total),
-                'fecha': v.created_at,
-            }
-            for v in Venta.objects.order_by('-created_at')[:5]
-        ],
+
+# 3. Vista de Ventas para usuarios normales
+@login_required(login_url='home')
+def ventas_ui(request):
+    exigir_usuario(request.user)
+    return render(request, 'myapp/ventas.html', {
+        'productos': Producto.objects.filter(disponible=True).only('pk', 'sku', 'nombre', 'precio', 'stock'),
+        'es_admin': es_admin(request.user),
     })
 
 
-class DashboardTemplateView(TemplateView):
-  template_name = 'myapp/dashboard.html' 
-  
+# 4. Crear y Editar Productos (juntamos la lógica repetitiva mentalmente)
+@admin_requerido
+def producto_crear(request):
+    return _guardar_producto(request, pk=None)
+
+
+@admin_requerido
+def producto_editar(request, pk):
+    return _guardar_producto(request, pk=pk)
+
+
+def _guardar_producto(request, pk):
+    producto = get_object_or_404(Producto, pk=pk) if pk else None
+    form = ProductoForm(request.POST or None, instance=producto)
+    
+    if request.method == 'POST' and form.is_valid():
+        try:
+            prod = form.save(user=request.user)
+            if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+                return JsonResponse({'id': prod.pk, 'url': '/api/inventario/'})
+            return redirect('inventario')
+        except ValidationError as exc:
+            form.add_error(None, exc)
+        except IntegrityError:
+            form.add_error(None, 'El código ya está en uso. Revisa los datos.')
+            
+    titulo = 'Editar producto' if pk else 'Crear producto'
+    return render(request, 'myapp/producto_form.html', {'form': form, 'titulo': titulo})
+
+
+# 5. Cerrar sesión
+@login_required(login_url='home')
+def cerrar_sesion(request):
+    logout(request)
+    return redirect('home')
+
+
+# 6. Vista de Inicio (Registro y Login juntos)
 class HomeView(View):
+    def get(self, request):
+        return render(request, 'myapp/home.html')
 
-  def get(self, request):
-    return render(request, 'myapp/home.html')  # O el nombre de tu template home
+    def post(self, request):
+        action = request.POST.get('action')
 
-  def post(self, request):
-    action = request.POST.get('action')
+        # Registrarse
+        if action == 'register':
+            username = request.POST.get('reg_username')
+            password = request.POST.get('reg_password')
+            
+            if not username or not password:
+                return render(request, 'myapp/home.html', {'error_reg': 'Faltan datos.'})
+            
+            if User.objects.filter(username=username).exists():
+                return render(request, 'myapp/home.html', {'error_reg': 'El usuario ya existe.'})
 
-    # Lógica para Crear Usuario Nuevo
-    if action == 'register':
-      username = request.POST.get('reg_username')
-      password = request.POST.get('reg_password')
-      if username and password:
-        if not User.objects.filter(username=username).exists():
-          user = User.objects.create_user(username=username, password=password)
-          login(request, user)
-          return redirect(
-              'dashboard_ui'
-          )  # Redirige al dashboard tras crear cuenta
-        else:
-          return render(
-              request,
-              'myapp/home.html',
-              {'error_reg': 'El usuario ya existe.'},
-          )
+            try:
+                user = User(username=username)
+                user.full_clean(exclude=['password'])
+                validate_password(password, user)
+                with transaction.atomic():
+                    user.set_password(password)
+                    user.save()
+                    PerfilUsuario.objects.create(user=user, role=PerfilUsuario.Rol.SELLER)
+                
+                login(request, user)
+                return redirect('ventas_ui')
+            except (ValidationError, IntegrityError):
+                return render(request, 'myapp/home.html', {'error_reg': 'Usa una contraseña más segura (mínimo 8 caracteres).'})
 
-    # Lógica para Iniciar Sesión
-    elif action == 'login':
-      username = request.POST.get('log_username')
-      password = request.POST.get('log_password')
-      user = authenticate(request, username=username, password=password)
-      if user is not None:
-        login(request, user)
-        return redirect('dashboard_ui')  # Redirige al dashboard tras loguearse
-      else:
-        return render(
-            request,
-            'myapp/home.html',
-            {'error_log': 'Credenciales incorrectas.'},
-        )
+        # Iniciar sesión
+        elif action == 'login':
+            user = authenticate(request, username=request.POST.get('log_username'), password=request.POST.get('log_password'))
+            if user is not None and rol_usuario(user):
+                login(request, user)
+                return redirect('dashboard_ui' if es_admin(user) else 'ventas_ui')
+            
+            return render(request, 'myapp/home.html', {'error_log': 'Credenciales incorrectas.'})
 
-    return render(request, 'myapp/home.html')
+        return render(request, 'myapp/home.html')

@@ -1,0 +1,195 @@
+<!doctype html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width,initial-scale=1">
+    <title>Ventas - XYZpos</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-[#0f0f13] text-slate-200 min-h-screen p-4 md:p-8">
+    <header class="flex flex-wrap justify-between gap-4">
+        <h1 class="text-2xl text-orange-500 font-bold">Ventas · {{ request.user.username }}</h1>
+        <nav class="flex items-center gap-4">
+            {% if es_admin %}
+                <a href="{% url 'dashboard_ui' %}" class="hover:text-orange-400 transition-colors">Dashboard</a> · 
+                <a href="{% url 'inventario' %}" class="hover:text-orange-400 transition-colors">Inventario</a>
+            {% endif %}
+            <form method="post" action="{% url 'logout' %}" class="inline ml-2">
+                {% csrf_token %}
+                <button class="bg-red-600/80 hover:bg-red-600 text-white px-3 py-1 rounded transition-all transform active:scale-95">Salir</button>
+            </form>
+        </nav>
+    </header>
+
+    <main class="max-w-5xl mx-auto mt-8 space-y-5">
+        <p id="sale-message" role="status" class="text-orange-300 whitespace-pre-line"></p>
+
+        <form id="sale-form" class="bg-[#1a1a22] border border-gray-800 rounded-xl p-5 space-y-4 shadow-lg">
+            {% csrf_token %}
+            <h2 id="sale-title" class="text-lg font-semibold text-orange-400">Nueva venta en borrador</h2>
+            <p class="text-sm text-gray-400">Los precios y el stock se vuelven a comprobar al confirmar.</p>
+            
+            <div id="sale-lines" class="space-y-3"></div>
+
+            <button type="button" id="add-line" class="text-orange-400 hover:text-orange-300 hover:underline transition-colors font-medium">+ Añadir producto</button>
+            
+            <div class="flex flex-wrap gap-4 pt-2">
+                <label class="flex flex-col text-sm text-gray-300">Pago 
+                    <select id="payment-method" class="bg-slate-800 border border-gray-700 p-2 rounded mt-1 focus:outline-none focus:border-orange-500">
+                        <option value="CASH">Efectivo</option>
+                        <option value="CARD">Tarjeta</option>
+                        <option value="TRANSFER">Transferencia</option>
+                    </select>
+                </label>
+                <label class="flex flex-col text-sm text-gray-300">Recibido (opcional) 
+                    <input id="amount-received" type="number" min="0" step="0.01" class="bg-slate-800 border border-gray-700 p-2 rounded mt-1 focus:outline-none focus:border-orange-500">
+                </label>
+            </div>
+
+            <div class="flex gap-3 pt-3">
+                <button class="bg-orange-600 hover:bg-orange-500 active:bg-orange-700 text-white font-medium rounded px-5 py-2.5 transition-all transform active:scale-95 shadow-md">Guardar borrador</button>
+                <button type="button" id="new-sale" class="bg-slate-700 hover:bg-slate-600 active:bg-slate-800 text-gray-200 font-medium rounded px-5 py-2.5 transition-all transform active:scale-95 shadow-md">Nueva venta</button>
+            </div>
+        </form>
+
+        <h2 class="text-xl font-semibold text-gray-300 pt-2">Ventas recientes y en espera</h2>
+        <div id="sale-list" class="space-y-3"></div>
+    </main>
+
+    <template id="line-template">
+        <div class="flex gap-2 flex-wrap items-center bg-slate-900/50 p-3 rounded-lg border border-gray-800">
+            <select aria-label="Producto" class="bg-slate-800 border border-gray-700 p-2 rounded flex-1 focus:outline-none focus:border-orange-500" required>
+                {% for p in productos %}<option value="{{ p.pk }}">{{ p.sku }} · {{ p.nombre }} · ${{ p.precio }} · stock {{ p.stock }}</option>{% endfor %}
+            </select>
+            <input aria-label="Cantidad" class="bg-slate-800 border border-gray-700 p-2 rounded w-24 text-center focus:outline-none focus:border-orange-500" type="number" min="1" step="1" value="1" required>
+            <button type="button" class="quitar-btn text-red-400 hover:text-red-300 hover:bg-red-950/30 px-3 py-2 rounded transition-colors font-medium">Quitar</button>
+        </div>
+    </template>
+
+    <script>
+    let editing = null; 
+    const message = document.getElementById('sale-message');
+    const lines = document.getElementById('sale-lines');
+    const csrf = document.querySelector('#sale-form [name=csrfmiddlewaretoken]').value;
+
+    async function api(path, method='GET', data) { 
+        // Forzamos la barra final para evitar el error 405 de Django
+        const cleanPath = path === '' ? '' : (path.endsWith('/') ? path : path + '/');
+        const response = await fetch(`/api/ventas/${cleanPath}`, {
+            method, 
+            headers: {'Content-Type':'application/json', 'X-CSRFToken': csrf}, 
+            body: data === undefined ? undefined : JSON.stringify(data)
+        }); 
+        const result = await response.json(); 
+        if (!response.ok) throw new Error(JSON.stringify(result)); 
+        return result; 
+    }
+
+    function addLine(item) { 
+        const template = document.getElementById('line-template');
+        // Usamos querySelector('div') para evitar que se rompa con espacios en el HTML
+        const row = template.content.cloneNode(true).querySelector('div'); 
+        
+        if (item) { 
+            row.querySelector('select').value = item.product; 
+            row.querySelector('input').value = item.quantity; 
+        } 
+        
+        // Buscamos el botón por su clase específica
+        row.querySelector('.quitar-btn').onclick = () => row.remove(); 
+        lines.append(row); 
+    }
+
+    document.getElementById('add-line').onclick = () => addLine();
+
+    function reset() { 
+        editing = null; 
+        lines.replaceChildren(); 
+        addLine(); 
+        document.getElementById('sale-title').textContent = 'Nueva venta en borrador'; 
+        document.getElementById('amount-received').value = ''; 
+        document.getElementById('payment-method').value = 'CASH';
+        message.textContent = '';
+    }
+
+    document.getElementById('new-sale').onclick = reset;
+
+    async function refresh() { 
+        const sales = await api(''); 
+        const list = document.getElementById('sale-list'); 
+        list.replaceChildren(); 
+        for (const sale of sales) { 
+            const card = document.createElement('article'); 
+            card.className = 'bg-slate-800/80 border border-gray-700/50 rounded-lg p-4 shadow flex flex-wrap justify-between items-center'; 
+            
+            const text = document.createElement('p'); 
+            text.className = 'font-medium';
+            text.textContent = `${sale.receipt_number} · ${sale.status} · ${sale.status === 'DRAFT' ? 'Total pendiente de confirmar' : '$'+sale.total}`; 
+            card.append(text); 
+            
+            const actionsDiv = document.createElement('div');
+            if (sale.status === 'DRAFT') { 
+                for (const [label, action] of [['Recuperar','edit'],['Confirmar','completar'],['Cancelar','cancelar']]) { 
+                    const button = document.createElement('button'); 
+                    button.type = 'button'; 
+                    button.className = 'ml-4 text-orange-400 hover:text-orange-300 hover:underline transition-colors font-medium text-sm'; 
+                    button.textContent = label; 
+                    button.onclick = async () => { 
+                        button.disabled = true; 
+                        try { 
+                            if (action === 'edit') { 
+                                const draft = await api(`${sale.id}/`); 
+                                editing = draft.id; 
+                                lines.replaceChildren(); 
+                                draft.items.forEach(addLine); 
+                                document.getElementById('sale-title').textContent = `Editar ${draft.receipt_number}`; 
+                                document.getElementById('payment-method').value = draft.payment_method; 
+                                document.getElementById('amount-received').value = draft.amount_received ?? ''; 
+                            } else { 
+                                const result = await api(`${sale.id}/${action}/`, 'POST', {}); 
+                                message.textContent = `${result.status} · Total $${result.total} · Cambio ${result.change_amount ?? 'no aplica'}`; 
+                                await refresh(); 
+                            } 
+                        } catch(error) { 
+                            message.textContent = error.message; 
+                        } finally { 
+                            button.disabled = false; 
+                        } 
+                    }; 
+                    actionsDiv.append(button); 
+                } 
+            } 
+            card.append(actionsDiv);
+            list.append(card); 
+        } 
+    }
+
+    document.getElementById('sale-form').onsubmit = async event => { 
+        event.preventDefault(); 
+        const button = event.target.querySelector('button:not([type=button])'); 
+        button.disabled = true; 
+        try { 
+            const items = [...lines.children].map(row => ({
+                product: Number(row.querySelector('select').value),
+                quantity: Number(row.querySelector('input').value)
+            })); 
+            const result = await api(editing ? `${editing}/` : '', editing ? 'PUT' : 'POST', {
+                items,
+                payment_method: document.getElementById('payment-method').value,
+                amount_received: document.getElementById('amount-received').value || null
+            }); 
+            message.textContent = `Borrador guardado: ${result.receipt_number}`; 
+            reset(); 
+            await refresh(); 
+        } catch(error) { 
+            message.textContent = error.message; 
+        } finally { 
+            button.disabled = false; 
+        } 
+    };
+
+    reset(); 
+    refresh().catch(error => { message.textContent = error.message; });
+    </script>
+</body>
+</html>

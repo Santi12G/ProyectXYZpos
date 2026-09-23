@@ -1,0 +1,166 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Inventario - XYZpos</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-[#0f0f13] text-slate-200 min-h-screen antialiased">
+  <header class="bg-[#141419] border-b border-gray-800 px-6 py-4 flex justify-between items-center">
+    <div>
+      <h1 class="text-xl font-bold text-orange-500">Inventario</h1>
+      <a class="text-sm text-gray-400 hover:text-gray-200 transition" href="{% url 'dashboard_ui' %}">Volver al dashboard</a>
+    </div>
+    <a href="{% url 'producto_crear' %}" class="bg-orange-600 hover:bg-orange-700 transition px-4 py-2 rounded-lg font-medium">Nuevo producto</a>
+  </header>
+
+  <main class="p-4 md:p-8">
+    <div class="mb-4 max-w-lg">
+      <label for="inventory-search" class="block text-sm font-medium text-gray-300 mb-1">Buscar producto</label>
+      <input id="inventory-search" type="search" placeholder="Nombre, SKU, código..." class="block bg-slate-800 border border-gray-700 rounded-lg p-3 w-full text-white focus:outline-none focus:border-orange-500">
+      <p id="inventory-count" class="text-xs text-gray-400 mt-2" aria-live="polite"></p>
+    </div>
+
+    <div class="overflow-x-auto rounded-lg border border-gray-800 bg-[#1a1a22]">
+      <table class="w-full text-left text-sm">
+        <thead class="bg-[#24242d] text-xs uppercase text-gray-400 border-b border-gray-800">
+          <tr>
+            <th class="p-3">Imagen</th>
+            <th class="p-3">SKU</th>
+            <th class="p-3">Nombre</th>
+            <th class="p-3">Categoría</th>
+            <th class="p-3">Precio</th>
+            <th class="p-3">Costo</th>
+            <th class="p-3">Stock</th>
+            <th class="p-3">Mínimo</th>
+            <th class="p-3">Estado</th>
+            <th class="p-3">Acciones</th>
+          </tr>
+        </thead>
+        <tbody id="inventory-rows" class="divide-y divide-gray-800">
+          {% for p in productos %}
+          <tr data-product data-search="{{ p.sku }} {{ p.barcode|default_if_none:'' }} {{ p.nombre }} {{ p.categoria|default_if_none:'' }}">
+            <td class="p-3">
+              {% if p.image_url %}
+              <img src="{{ p.image_url }}" alt="{{ p.nombre }}" loading="lazy" referrerpolicy="no-referrer" class="w-10 h-10 rounded object-cover">
+              {% else %}
+              <span class="text-gray-600 text-xs">Sin imagen</span>
+              {% endif %}
+            </td>
+            <td class="p-3 font-mono text-xs">{{ p.sku }}</td>
+            <td class="p-3 font-medium text-white">{{ p.nombre }}</td>
+            <td class="p-3 text-gray-400">{{ p.categoria|default:'—' }}</td>
+            <td class="p-3">${{ p.precio }}</td>
+            <td class="p-3 text-gray-400">{{ p.cost_price|default_if_none:'—' }}</td>
+            <td class="p-3 {% if p.stock_bajo %}text-red-400 font-bold{% endif %}">{{ p.stock }}</td>
+            <td class="p-3 text-gray-400">{{ p.min_stock }}</td>
+            <td class="p-3">
+              {% if p.disponible %}
+              <span class="px-2 py-1 text-xs bg-emerald-950 text-emerald-400 rounded-full">Activo</span>
+              {% else %}
+              <span class="px-2 py-1 text-xs bg-red-950 text-red-400 rounded-full">Inactivo</span>
+              {% endif %}
+            </td>
+            <td class="p-3">
+              <a class="text-orange-400 hover:text-orange-300 font-medium" href="{% url 'producto_editar' p.pk %}">Editar</a>
+            </td>
+          </tr>
+          {% empty %}
+          <tr>
+            <td colspan="10" class="p-8 text-center text-gray-500">No hay productos registrados.</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </main>
+
+  <dialog id="product-modal" class="bg-[#1a1a22] text-white rounded-xl w-full max-w-2xl p-6 border border-gray-800 backdrop:bg-black/80">
+    <div class="flex justify-between items-center mb-4 border-b border-gray-800 pb-3">
+      <h3 class="font-bold text-lg text-orange-500">Gestión de Producto</h3>
+      <button type="button" id="close-product" class="text-gray-400 hover:text-white">Cerrar ✕</button>
+    </div>
+    <div id="product-content"></div>
+  </dialog>
+
+  <script>
+    const search = document.getElementById('inventory-search');
+    const rows = document.querySelectorAll('[data-product]');
+    const countEl = document.getElementById('inventory-count');
+    
+    const normalize = val => val.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+
+    function filterProducts() {
+      const query = normalize(search.value);
+      let visible = 0;
+      rows.forEach(row => {
+        const match = normalize(row.dataset.search).includes(query);
+        row.style.display = match ? '' : 'none';
+        if (match) visible++;
+      });
+      countEl.textContent = `${visible} productos encontrados`;
+    }
+
+    search.addEventListener('input', filterProducts);
+    filterProducts();
+
+    const modal = document.getElementById('product-modal');
+    const content = document.getElementById('product-content');
+    document.getElementById('close-product').onclick = () => modal.close();
+
+    function installForm(html, url) {
+      const page = new DOMParser().parseFromString(html, 'text/html');
+      const formMain = page.querySelector('main') || page.querySelector('form');
+      content.replaceChildren(formMain);
+      
+      const form = content.querySelector('form');
+      if (!form) return;
+      form.action = url;
+
+      form.onsubmit = async event => {
+        event.preventDefault();
+        const submitBtn = form.querySelector('button[type="submit"]') || form.querySelector('button');
+        if (submitBtn) submitBtn.disabled = true;
+
+        try {
+          const response = await fetch(url, {
+            method: 'POST',
+            body: new FormData(form),
+            headers: { 'X-Requested-With': 'XMLHttpRequest' }
+          });
+          if (!response.ok) throw new Error('No fue posible guardar el producto.');
+
+          const contentType = response.headers.get('Content-Type') || '';
+          if (contentType.includes('application/json') || response.redirected) {
+            window.location.reload();
+          } else {
+            installForm(await response.text(), url);
+          }
+        } catch (error) {
+          const err = document.createElement('p');
+          err.className = 'text-red-400 text-sm mb-3';
+          err.textContent = error.message;
+          content.prepend(err);
+        } finally {
+          if (submitBtn) submitBtn.disabled = false;
+        }
+      };
+    }
+
+    document.addEventListener('click', async event => {
+      const link = event.target.closest('a');
+      if (!link || !/\/inventario\/(nuevo\/|\d+\/editar\/)$/.test(link.pathname)) return;
+      event.preventDefault();
+      try {
+        const response = await fetch(link.href);
+        if (!response.ok) throw new Error();
+        installForm(await response.text(), link.href);
+        modal.showModal();
+      } catch {
+        window.location.href = link.href;
+      }
+    });
+  </script>
+</body>
+</html>
