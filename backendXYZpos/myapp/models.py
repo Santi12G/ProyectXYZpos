@@ -255,37 +255,32 @@ class Venta(ModeloProtegido):
         from .permissions import exigir_venta
         venta = Venta.objects.select_for_update().get(pk=self.pk)
         exigir_venta(user or venta.seller, venta)
+        
         if venta.status != self.Estado.DRAFT:
             raise ValidationError('Solo se puede completar una venta en borrador.')
         if venta.legacy:
             raise ValidationError('La venta histórica no tiene detalles verificables.')
+            
         items = list(venta.items.order_by('product_id'))
         if not items:
             raise ValidationError('La venta debe tener al menos un producto.')
+            
         subtotal, descuento = Decimal('0.00'), Decimal('0.00')
         for item in items:
-            producto = Producto.objects.select_for_update().get(pk=item.product_id)
-            if not producto.disponible:
-                raise ValidationError(f'El producto {producto.nombre} no está activo.')
-            if item.quantity > producto.stock:
-                raise ValidationError(f'Stock insuficiente para {producto.nombre}: disponible {producto.stock}.')
-            item.product_name = producto.nombre
-            item.unit_price = producto.precio
-            item.unit_cost = producto.cost_price
-            item.subtotal = item.unit_price * item.quantity - item.discount
-            item.full_clean()
-            models.Model.save(item)
-            _registrar_stock(producto, -item.quantity, 'SALE', user or venta.seller, venta=venta)
+            # Ya no validamos ni descontamos stock aquí porque se hizo al crear el ItemVenta
             subtotal += item.unit_price * item.quantity
             descuento += item.discount
+            
         venta.subtotal, venta.discount = subtotal, descuento
         if subtotal == descuento and venta.tax:
             raise ValidationError('No se pueden cobrar impuestos con una base de venta cero.')
+            
         venta.total = subtotal - descuento + venta.tax
         if venta.amount_received is not None:
             if venta.amount_received < venta.total:
                 raise ValidationError('El monto recibido no cubre el total de la venta.')
             venta.change_amount = venta.amount_received - venta.total
+            
         venta.status = self.Estado.COMPLETED
         venta.completed_at = timezone.now()
         venta.full_clean()
@@ -298,8 +293,15 @@ class Venta(ModeloProtegido):
         from .permissions import exigir_venta
         venta = Venta.objects.select_for_update().get(pk=self.pk)
         exigir_venta(user or venta.seller, venta)
+        
         if venta.status != self.Estado.DRAFT:
             raise ValidationError('Una venta completada debe procesarse mediante un reembolso.')
+            
+        # Liberar el inventario reservado por el borrador
+        for item in venta.items.all():
+            producto = Producto.objects.select_for_update().get(pk=item.product_id)
+            _registrar_stock(producto, item.quantity, 'SALE', user or venta.seller, venta=venta)
+            
         venta.status = self.Estado.CANCELLED
         _guardar_validado(venta)
         self.refresh_from_db()
@@ -338,25 +340,53 @@ class ItemVenta(ModeloProtegido):
         venta = Venta.objects.select_for_update().get(pk=self.sale_id)
         if venta.status != Venta.Estado.DRAFT:
             raise ValidationError('Los detalles de ventas cerradas son inmutables.')
+        
         if self.pk and ItemVenta.objects.get(pk=self.pk).sale_id != self.sale_id:
             raise ValidationError('No se puede trasladar un detalle a otra venta.')
-        self.sale = venta
+            
         if isinstance(self.quantity, bool) or not isinstance(self.quantity, int) or self.quantity <= 0:
             raise ValidationError('La cantidad debe ser un entero positivo.')
-        producto = Producto.objects.get(pk=self.product_id)
+
+        producto = Producto.objects.select_for_update().get(pk=self.product_id)
+        
+        # Calcular la diferencia de stock si se está editando la cantidad de un ítem existente
+        cantidad_anterior = 0
+        if self.pk:
+            cantidad_anterior = ItemVenta.objects.get(pk=self.pk).quantity
+            
+        diferencia_stock = self.quantity - cantidad_anterior
+        
+        if diferencia_stock > producto.stock:
+            raise ValidationError(f'Stock insuficiente para {producto.nombre}. Disponible: {producto.stock}.')
+
         if not producto.disponible:
             raise ValidationError('El producto está inactivo.')
+
+        self.sale = venta
         self.product_name, self.unit_price, self.unit_cost = producto.nombre, producto.precio, producto.cost_price
         self.discount = Decimal(str(self.discount))
         self.subtotal = self.unit_price * self.quantity - self.discount
         self.full_clean()
-        return super().save(*args, **kwargs)
+        
+        # Guardar el ítem primero
+        resultado = super().save(*args, **kwargs)
+        
+        # Descontar (o ajustar) el inventario en tiempo real durante el DRAFT
+        if diferencia_stock != 0:
+            _registrar_stock(producto, -diferencia_stock, 'SALE', venta.seller, venta=venta)
+            
+        return resultado
 
     @transaction.atomic
     def delete(self, *args, **kwargs):
         venta = Venta.objects.select_for_update().get(pk=self.sale_id)
         if venta.status != Venta.Estado.DRAFT:
             raise ValidationError('Los detalles de ventas cerradas son inmutables.')
+            
+        # Devolver el stock reservado al eliminar el ítem del borrador
+        producto = Producto.objects.select_for_update().get(pk=self.product_id)
+        _registrar_stock(producto, self.quantity, 'SALE', venta.seller, venta=venta)
+        
         return super().delete(*args, **kwargs)
 
     def __str__(self):
