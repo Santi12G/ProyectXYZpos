@@ -71,6 +71,12 @@ def detalle_venta(venta, user):
 # 3. VIEWSET (La lógica de la caja registradora)
 # ==========================================
 # 1. Modifica la consulta en el ViewSet para quitar el prefetch conflictivo
+# ==========================================
+# 3. VIEWSET (La lógica de la caja registradora)
+# ==========================================
+# ==========================================
+# 3. VIEWSET (La lógica de la caja registradora)
+# ==========================================
 class VentaViewSet(ViewSet):
     permission_classes = (EsUsuarioPOS,)
 
@@ -89,17 +95,52 @@ class VentaViewSet(ViewSet):
         return Response(detalle_venta(venta, request.user))
 
     def create(self, request):
-        """Método necesario para que el botón de Guardar borrador/Venta pueda hacer POST"""
-        # Recogemos los datos que envía el frontend
-        total_monto = request.data.get('total', 0)
-        metodo_pago = request.data.get('payment_method', 'CASH')
-        
-        # Creamos la venta en estado borrador o completada según el frontend
-        venta = Venta.objects.create(
-            seller=request.user if request.user.is_authenticated else None,
-            total=total_monto,
-            payment_method=metodo_pago,
-            status='DRAFT' # O el estado que maneje tu interfaz
-        )
-        
-        return Response(detalle_venta(venta, request.user), status=201)
+        serializer = VentaEntrada(data=request.data, context={'request': request})
+        serializer.is_valid(raise_exception=True)
+        datos = serializer.validated_data
+
+        try:
+            with transaction.atomic():
+                # 1. Creamos la venta base
+                venta = Venta.objects.create(
+                    seller=request.user if request.user.is_authenticated else None,
+                    payment_method=datos.get('payment_method', 'CASH'),
+                    amount_received=datos.get('amount_received'),
+                    status='DRAFT',
+                    discount=0,
+                    subtotal=0,
+                    tax=datos.get('tax', 0),
+                    total=0
+                )
+
+                subtotal_calculado = 0
+
+                # 2. Guardamos cada item adaptándonos a TU modelo
+                for item in datos['items']:
+                    producto = item['product']
+                    cantidad = item['quantity']
+                    descuento_item = item.get('discount', 0)
+                    
+                    precio_unitario = producto.precio 
+                    subtotal_item = (precio_unitario * cantidad) - descuento_item
+                    
+                    # Usamos exactamente los campos de tu clase ItemVenta
+                    ItemVenta.objects.create(
+                        venta=venta,
+                        product_name=producto.nombre, # Tu modelo pide el texto, no el objeto
+                        unit_price=precio_unitario,
+                        subtotal=subtotal_item
+                        # unit_cost tomará su valor default (0)
+                    )
+                    
+                    subtotal_calculado += subtotal_item
+
+                # 3. Actualizamos la factura con el total real
+                venta.subtotal = subtotal_calculado
+                venta.total = subtotal_calculado + venta.tax - venta.discount
+                venta.save()
+
+            return Response(detalle_venta(venta, request.user), status=201)
+
+        except Exception as e:
+            raise ValidationError(f"Error interno al guardar los items: {str(e)}")

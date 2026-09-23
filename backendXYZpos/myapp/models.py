@@ -31,6 +31,10 @@ class PerfilUsuario(models.Model):
     user = models.OneToOneField(User, on_delete=models.CASCADE)
     role = models.CharField(max_length=50, default='Vendedor')
     active = models.BooleanField(default=True)
+    
+    # Agrega estas dos líneas para que Django maneje las fechas automáticamente
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
 
     def __str__(self):
         return f"{self.user.username} - {self.role}"

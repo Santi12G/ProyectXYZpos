@@ -146,16 +146,24 @@ class HomeView(View):
                 user = User(username=username)
                 user.full_clean(exclude=['password'])
                 validate_password(password, user)
+                
                 with transaction.atomic():
                     user.set_password(password)
                     user.save()
-                    PerfilUsuario.objects.create(user=user, role=PerfilUsuario.Rol.SELLER)
+                    PerfilUsuario.objects.create(user=user, role='SELLER')
                 
                 login(request, user)
                 return redirect('ventas_ui')
-            except (ValidationError, IntegrityError):
-                return render(request, 'myapp/home.html', {'error_reg': 'Usa una contraseña más segura (mínimo 8 caracteres).'})
-
+                
+            except ValidationError as e:
+                # Esto capturará el error exacto (ej. contraseña muy común) y lo mostrará en pantalla
+                errores = ', '.join(e.messages) if hasattr(e, 'messages') else str(e)
+                print("Error de validación:", errores) # También lo imprime en tu terminal
+                return render(request, 'myapp/home.html', {'error_reg': f'Error: {errores}'})
+                
+            except IntegrityError as e:
+                print("Error de base de datos:", e)
+                return render(request, 'myapp/home.html', {'error_reg': 'Error de integridad en la base de datos.'})
         # Iniciar sesión
         elif action == 'login':
             user = authenticate(request, username=request.POST.get('log_username'), password=request.POST.get('log_password'))
