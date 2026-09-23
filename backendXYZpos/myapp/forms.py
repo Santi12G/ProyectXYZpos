@@ -8,8 +8,8 @@ class ProductoForm(forms.ModelForm):
 
     class Meta:
         model = Producto
-        # Solo ponemos los campos que existen de verdad en models.py
         fields = ('sku', 'nombre', 'categoria', 'precio', 'stock', 'disponible')
+        error_messages = {'sku': {'unique': 'Ya existe un producto con ese SKU.'}}
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -42,8 +42,7 @@ class ProductoForm(forms.ModelForm):
         producto = super().save(commit=False)
         
         if commit:
-            # Guardamos el producto de forma normal (sin argumentos extra que rompen Django)
-            producto.save()
+            producto.save(user=user, expected_stock=self.cleaned_data.get('stock_original'))
             self.save_m2m()
             
         return producto

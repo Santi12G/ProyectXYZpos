@@ -69,6 +69,7 @@
 
     <script>
     let editing = null; 
+    let editingTax = '0.00';
     const message = document.getElementById('sale-message');
     const lines = document.getElementById('sale-lines');
     const csrfInput = document.querySelector('#sale-form [name=csrfmiddlewaretoken]');
@@ -108,6 +109,7 @@
     function addLine(item) { 
         const template = document.getElementById('line-template');
         const row = template.content.firstElementChild.cloneNode(true); 
+        row.dataset.discount = item?.discount ?? '0.00';
         if (item) { 
             row.querySelector('select').value = item.product; 
             row.querySelector('input').value = item.quantity; 
@@ -121,6 +123,7 @@
     // Ahora recibe un parámetro para saber si debe mantener el mensaje en pantalla
     function reset(keepMessage = false) { 
         editing = null; 
+        editingTax = '0.00';
         lines.replaceChildren(); 
         addLine(); 
         document.getElementById('sale-title').textContent = 'Nueva venta en borrador'; 
@@ -162,6 +165,7 @@
                             if (action === 'edit') { 
                                 const draft = await api(`${sale.id}/`); 
                                 editing = draft.id; 
+                                editingTax = draft.tax;
                                 lines.replaceChildren(); 
                                 draft.items.forEach(addLine); 
                                 document.getElementById('sale-title').textContent = `Editar ${draft.receipt_number}`; 
@@ -170,6 +174,7 @@
                                 showMsg(`Recuperaste el borrador ${draft.receipt_number} para editarlo.`);
                             } else { 
                                 const result = await api(`${sale.id}/${action}/`, 'POST', {}); 
+                                if (editing === sale.id) reset(true);
                                 showMsg(`${result.status} · Total $${result.total} · Cambio ${result.change_amount ?? 'N/A'}`); 
                                 await refresh(); 
                             } 
@@ -196,22 +201,24 @@
         try { 
             const items = [...lines.children].map(row => ({
                 product: Number(row.querySelector('select').value),
-                quantity: Number(row.querySelector('input').value)
+                quantity: Number(row.querySelector('input').value),
+                discount: row.dataset.discount
             })); 
 
             if (items.length === 0) throw new Error("Añade al menos un producto antes de guardar.");
 
             const data = {
                 items,
+                tax: editingTax,
                 payment_method: document.getElementById('payment-method').value,
-                amount_received: document.getElementById('amount-received').value ? parseFloat(document.getElementById('amount-received').value) : null
+                amount_received: document.getElementById('amount-received').value || null
             };
 
             const result = await api(editing ? `${editing}/` : '', editing ? 'PUT' : 'POST', data); 
             
             // Le decimos al reset que NO borre el mensaje de éxito
             reset(true); 
-            showMsg(`¡Éxito! Venta guardada con recibo: ${result.receipt_number}`); 
+            showMsg(`Borrador ${result.receipt_number} guardado. Pulsa Confirmar para completar la venta.`);
             await refresh(); 
         } catch(error) { 
             // Si hay un error, lo imprimimos en rojo

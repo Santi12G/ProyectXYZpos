@@ -99,18 +99,26 @@ def producto_editar(request, pk):
 
 def _guardar_producto(request, pk):
     producto = get_object_or_404(Producto, pk=pk) if pk else None
-    form = ProductoForm(request.POST or None, instance=producto)
+    form = ProductoForm(request.POST if request.method == 'POST' else None, instance=producto)
     
     if request.method == 'POST' and form.is_valid():
         try:
-            prod = form.save(user=request.user)
+            with transaction.atomic():
+                prod = form.save(user=request.user)
             if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
                 return JsonResponse({'id': prod.pk, 'url': '/api/inventario/'})
             return redirect('inventario')
         except ValidationError as exc:
             form.add_error(None, exc)
-        except IntegrityError:
-            form.add_error(None, 'El código ya está en uso. Revisa los datos.')
+        except IntegrityError as exc:
+            # Solo una colisión real de SKU debe presentarse como duplicado.
+            causa = exc.__cause__
+            diagnostico = getattr(causa, 'diag', None)
+            if (getattr(causa, 'pgcode', None) == '23505'
+                    and getattr(diagnostico, 'constraint_name', None) == 'myapp_producto_sku_key'):
+                form.add_error('sku', 'Ya existe un producto con ese SKU.')
+            else:
+                raise
             
     titulo = 'Editar producto' if pk else 'Crear producto'
     return render(request, 'myapp/producto_form.html', {'form': form, 'titulo': titulo})

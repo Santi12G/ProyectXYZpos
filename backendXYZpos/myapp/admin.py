@@ -8,6 +8,9 @@ class ProductoAdmin(admin.ModelAdmin):
     list_display = ('sku', 'nombre', 'categoria', 'precio', 'stock', 'disponible')
     search_fields = ('sku', 'nombre')
 
+    def save_model(self, request, obj, form, change):
+        obj.save(user=request.user)
+
 
 @admin.register(Venta)
 class VentaAdmin(admin.ModelAdmin):

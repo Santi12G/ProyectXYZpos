@@ -14,3 +14,6 @@ __pycache__/
 
 # Base de datos local de SQLite (por si quedó alguna por ahí)
 db.sqlite3
+.env
+.env.*
+!.env.example

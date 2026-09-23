@@ -1,0 +1,5 @@
+Django>=6.1,<6.2
+djangorestframework>=3.18,<4
+django-import-export>=4.4,<5
+django-jazzmin>=3,<4
+psycopg2-binary>=2.9,<3
