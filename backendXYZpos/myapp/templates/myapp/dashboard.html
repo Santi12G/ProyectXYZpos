@@ -1,213 +1,374 @@
-<!DOCTYPE html>
-<html lang="es">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>ProyectXYZpos - Admin Dashboard</title>
-    <!-- Tailwind CSS -->
-    <script src="https://cdn.tailwindcss.com"></script>
-    <!-- Chart.js -->
-    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-    <style>
-        body {
-            background-color: #0f0f13;
-            color: #e2e8f0;
-        }
-        .glass-card {
-            background: linear-gradient(135deg, rgba(30, 30, 38, 0.7) 0%, rgba(20, 20, 26, 0.9) 100%);
-            border: 1px solid rgba(255, 255, 255, 0.08);
-            box-shadow: 0 10px 30px -10px rgba(0, 0, 0, 0.5);
-        }
-        .sidebar-item:hover {
-            background: linear-gradient(90deg, rgba(249, 115, 22, 0.15) 0%, rgba(255, 255, 255, 0) 100%);
-            border-left: 3px solid #f97316;
-        }
-    </style>
-</head>
-<body class="flex h-screen overflow-hidden">
+{% extends 'myapp/base.html' %}
+{% comment %}
+  Panel del administrador con tres pestañas (se elige con el # de la URL):
+    #resumen     Dashboard de ventas + "Exportar reporte PDF" (usa el diálogo de impresión del navegador).
+    #reembolsos  Buscar ventas y preparar un reembolso (vista previa: el backend no tiene endpoint de reembolsos).
+    #atencion    Bandeja de tickets de clientes con chat (datos de ejemplo: el backend no tiene tickets).
+  Datos reales usados: /api/analytics/metrics/ (métricas) y /api/ventas/ (ventas con sus productos).
+{% endcomment %}
+{% block title %}Dashboard{% endblock %}
+{% block page_title %}Administración{% endblock %}
+{% block head %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js" integrity="sha384-NrKB+u6Ts6AtkIhwPixiKTzgSKNblyhlk0Sohlgar9UHUBzai/sgnNNWWd291xqt" crossorigin="anonymous"></script>
+{% endblock %}
 
-    <!-- Sidebar Estilo Pro -->
-    <aside class="w-64 bg-[#141419] border-r border-gray-800 flex flex-col justify-between hidden md:flex">
-        <div>
-            <div class="p-6 border-b border-gray-800">
-                <h1 class="text-xl font-bold tracking-wider text-orange-500">PROYECT XYZ</h1>
-                <p class="text-xs text-gray-500 uppercase tracking-widest mt-1">POS Admin Panel</p>
-            </div>
-            <nav class="mt-6 space-y-1">
-                <!-- Dashboard General -->
-                <a href="{% url 'dashboard_ui' %}" class="flex items-center px-6 py-3 text-sm font-medium text-white sidebar-item bg-[#1a1a22] border-l-3 border-orange-500">
-                    📊 Dashboard General
-                </a>
-                
-                <!-- Inventario -->
-                <a href="{% url 'inventario' %}" class="flex items-center px-6 py-3 text-sm font-medium text-gray-400 hover:text-white sidebar-item">
-                    📦 Inventario
-                </a>
-                
-                <!-- Transacciones / Ventas -->
-                <a href="{% url 'ventas_ui' %}" class="flex items-center px-6 py-3 text-sm font-medium text-gray-400 hover:text-white sidebar-item">
-                    💳 Transacciones
-                </a>
-                
-                <!-- Clientes (Si aún no tienes la vista creada, puedes dejar el '#' temporalmente) -->
-                <a href="#" class="flex items-center px-6 py-3 text-sm font-medium text-gray-400 hover:text-white sidebar-item">
-                    👥 Clientes
-                </a>
-            </nav>
-        </div>
-        <div class="p-6 border-t border-gray-800">
-            <button onclick="alert('Sesión cerrada')" class="w-full bg-gradient-to-r from-orange-600 to-amber-600 hover:from-orange-500 hover:to-amber-500 text-white font-medium py-2 px-4 rounded-lg transition shadow-lg text-sm">
-                LOG OUT
-            </button>
-        </div>
-    </aside>
+{% block content %}
+<nav class="tabs">
+  <a href="#resumen" data-tab="resumen">Dashboard de ventas</a>
+  <a href="#reembolsos" data-tab="reembolsos">Reembolsos</a>
+  <a href="#atencion" data-tab="atencion">Atención al cliente</a>
+</nav>
 
-    <!-- Main Content Area -->
-    <main class="flex-1 flex flex-col h-screen overflow-y-auto">
-        <!-- Top Navigation Bar -->
-        <header class="h-16 bg-[#141419]/80 backdrop-blur border-b border-gray-800 flex items-center justify-between px-8 sticky top-0 z-10">
-            <h2 class="text-lg font-semibold text-gray-200">Panel de Rendimiento</h2>
-            <div class="flex items-center space-x-4">
-                <div class="text-right">
-                    <p class="text-sm font-medium text-white">Administrador</p>
-                    <p class="text-xs text-orange-400">Online</p>
-                </div>
-                <div class="w-10 h-10 rounded-full bg-gradient-to-tr from-orange-500 to-amber-500 flex items-center justify-center font-bold text-white shadow-md">
-                    S
-                </div>
-            </div>
-        </header>
+<!-- ===================== 1. Dashboard de ventas ===================== -->
+<section id="resumen" data-section>
+  <div class="print-only">
+    <h1>Reporte de ventas - XYZpos</h1>
+    <p id="report-date" class="muted"></p>
+  </div>
 
-        <!-- Dashboard Body Content -->
-        <div class="p-8 max-w-7xl mx-auto w-full space-y-8">
-            
-            <!-- Cards Grid -->
-            <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
-                <!-- Card 1 -->
-                <div class="glass-card p-6 rounded-2xl relative overflow-hidden">
-                    <div class="absolute -right-6 -bottom-6 w-24 h-24 bg-orange-500/10 rounded-full blur-xl"></div>
-                    <p class="text-gray-400 text-xs uppercase tracking-wider font-semibold">Ingresos del Mes</p>
-                    <h3 id="card-ingresos" class="text-3xl font-extrabold text-white mt-3">$0</h3>
-                    <div class="mt-4 flex items-center text-xs text-emerald-400 font-medium">
-                        <span>↑ Actualizado en tiempo real</span>
-                    </div>
-                </div>
+  <div class="toolbar no-print" style="justify-content: space-between; margin-bottom: 12px">
+    <span class="muted">Datos del mes actual y de las ventas registradas.</span>
+    <button type="button" class="btn btn-primary" onclick="window.print()">Exportar reporte PDF</button>
+  </div>
+  <div id="metrics-error" class="message message-error" hidden></div>
 
-                <!-- Card 2 -->
-                <div class="glass-card p-6 rounded-2xl relative overflow-hidden">
-                    <div class="absolute -right-6 -bottom-6 w-24 h-24 bg-blue-500/10 rounded-full blur-xl"></div>
-                    <p class="text-gray-400 text-xs uppercase tracking-wider font-semibold">Transacciones Realizadas</p>
-                    <h3 id="card-transacciones" class="text-3xl font-extrabold text-white mt-3">0</h3>
-                    <div class="mt-4 flex items-center text-xs text-gray-400 font-medium">
-                        <span>Volumen total de ventas</span>
-                    </div>
-                </div>
+  <div class="kpis">
+    <div class="kpi"><div class="kpi-label">Ventas totales del mes</div><div class="kpi-value" id="kpi-total">—</div></div>
+    <div class="kpi"><div class="kpi-label">Número de ventas del mes</div><div class="kpi-value" id="kpi-count">—</div></div>
+    <div class="kpi"><div class="kpi-label">Productos vendidos</div><div class="kpi-value" id="kpi-units">—</div></div>
+    <div class="kpi"><div class="kpi-label">Ticket promedio</div><div class="kpi-value" id="kpi-ticket">—</div></div>
+  </div>
 
-                <!-- Card 3 -->
-                <div class="glass-card p-6 rounded-2xl relative overflow-hidden">
-                    <div class="absolute -right-6 -bottom-6 w-24 h-24 bg-purple-500/10 rounded-full blur-xl"></div>
-                    <p class="text-gray-400 text-xs uppercase tracking-wider font-semibold">Cumplimiento de Meta</p>
-                    <h3 id="card-meta" class="text-3xl font-extrabold text-orange-400 mt-3">0%</h3>
-                    <div class="w-full bg-gray-800 h-2 rounded-full mt-4 overflow-hidden">
-                        <div id="progress-bar" class="bg-gradient-to-r from-orange-500 to-amber-500 h-full rounded-full transition-all duration-1000" style="width: 0%"></div>
-                    </div>
-                </div>
-            </div>
+  <div class="grid-2">
+    <div class="panel">
+      <div class="panel-header"><h2>Ingresos de los últimos 7 días</h2></div>
+      <div class="panel-body"><div style="height: 260px"><canvas id="chart-days"></canvas></div></div>
+    </div>
+    <div class="panel">
+      <div class="panel-header"><h2>Productos más vendidos</h2></div>
+      <div class="panel-body"><div style="height: 260px"><canvas id="chart-products"></canvas></div></div>
+    </div>
+  </div>
 
-            <!-- Charts Section -->
-            <div class="glass-card p-6 rounded-2xl">
-                <div class="flex justify-between items-center mb-6">
-                    <h3 class="text-base font-semibold text-gray-200">Comportamiento Financiero (Últimos 7 días)</h3>
-                    <span class="text-xs bg-orange-500/20 text-orange-400 py-1 px-3 rounded-full border border-orange-500/30">Analytics Venta</span>
-                </div>
-                <div class="relative h-[320px] w-full">
-                    <canvas id="salesChart"></canvas>
-                </div>
-            </div>
+  <div class="panel">
+    <div class="panel-header"><h2>Detalle por día</h2></div>
+    <table>
+      <thead><tr><th>Día</th><th class="num">Ventas</th><th class="num">Ingresos</th></tr></thead>
+      <tbody id="days-table"></tbody>
+    </table>
+  </div>
+</section>
 
-        </div>
-    </main>
+<!-- ===================== 2. Reembolsos ===================== -->
+<section id="reembolsos" data-section hidden>
+  <div id="refund-message"></div>
+  <div class="panel">
+    <div class="panel-header">
+      <h2>Ventas finalizadas</h2>
+      <input id="refund-search" type="search" placeholder="Buscar comprobante (POS-...)" aria-label="Buscar comprobante">
+    </div>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Comprobante</th><th>Medio de pago</th><th class="num">Unidades</th><th class="num">Total</th><th>Estado</th><th>Acciones</th></tr></thead>
+        <tbody id="refund-rows"><tr><td colspan="6" class="empty">Cargando…</td></tr></tbody>
+      </table>
+    </div>
+  </div>
 
-    <!-- Script de consumo de API y renderizado dinámico de Chart.js -->
-    <script>
-        fetch('/api/analytics/metrics/')
-            .then(response => response.json())
-            .then(data => {
-                // Rellenar tarjetas principales
-                const ingresos = data.cards_summary.ingresos_mes;
-                const transacciones = data.cards_summary.transacciones_mes;
-                const meta = data.cards_summary.meta_progreso;
+  <div class="panel" id="refund-detail" hidden>
+    <div class="panel-header"><h2 id="refund-detail-title">Detalle de la venta</h2></div>
+    <table>
+      <thead><tr><th>Producto</th><th class="num">Cantidad</th><th class="num">Precio</th><th class="num">Subtotal</th></tr></thead>
+      <tbody id="refund-detail-rows"></tbody>
+    </table>
+  </div>
+</section>
 
-                document.getElementById('card-ingresos').innerText = `$${ingresos.toLocaleString()}`;
-                document.getElementById('card-transacciones').innerText = transacciones;
-                document.getElementById('card-meta').innerText = `${meta}%`;
-                
-                // Animar barra de progreso
-                setTimeout(() => {
-                    document.getElementById('progress-bar').style.width = `${meta}%`;
-                }, 300);
+<!-- Modal del reembolso -->
+<dialog id="refund-modal">
+  <form id="refund-form">
+    <div class="dialog-header">
+      <h2 id="refund-modal-title">Reembolso</h2>
+      <button type="button" class="btn btn-sm" onclick="document.getElementById('refund-modal').close()">Cerrar</button>
+    </div>
+    <div class="dialog-body">
+      <p class="small muted">Indica cuántas unidades devuelve el cliente de cada producto.</p>
+      <table>
+        <thead><tr><th>Producto</th><th class="num">Vendidas</th><th>Devolver</th></tr></thead>
+        <tbody id="refund-items"></tbody>
+      </table>
+      <p></p>
+      <div class="field">
+        <label for="refund-reason">Motivo del reembolso *</label>
+        <textarea id="refund-reason" rows="3" required></textarea>
+      </div>
+      <div class="field"><label><input type="checkbox" id="refund-restock" checked> Devolver los productos al inventario</label></div>
+      <p class="small muted">Monto a reembolsar: <strong id="refund-amount">$0,00</strong></p>
+      <button type="submit" class="btn btn-primary">Registrar reembolso</button>
+    </div>
+  </form>
+</dialog>
 
-                // Configurar Gráfico con estilo moderno difuminado
-                const rawData = data.charts.line_chart_semana;
-                const labels = rawData.map(item => item.dia);
-                const values = rawData.map(item => item.ingreso);
+<!-- ===================== 3. Atención al cliente ===================== -->
+<section id="atencion" data-section hidden>
+  <div class="message message-info">Datos de ejemplo: el backend actual todavía no tiene tickets de clientes. Los cambios se pierden al recargar.</div>
+  <div class="support">
+    <div class="panel">
+      <div class="panel-header">
+        <h2>Bandeja de tickets</h2>
+        <select id="ticket-filter" aria-label="Filtrar tickets">
+          <option value="">Todos</option>
+          <option>Abierto</option>
+          <option>En proceso</option>
+          <option>Cerrado</option>
+        </select>
+      </div>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Cliente</th><th>Asunto</th><th>Estado</th><th>Prioridad</th><th>Fecha</th></tr></thead>
+          <tbody id="ticket-rows"></tbody>
+        </table>
+      </div>
+    </div>
 
-                const ctx = document.getElementById('salesChart').getContext('2d');
-                
-                // Gradiente para el área bajo la curva
-                const gradient = ctx.createLinearGradient(0, 0, 0, 300);
-                gradient.addColorStop(0, 'rgba(249, 115, 22, 0.4)');
-                gradient.addColorStop(1, 'rgba(249, 115, 22, 0.0)');
+    <div class="panel chat">
+      <div class="panel-header">
+        <h2 id="chat-title">Selecciona un ticket</h2>
+        <select id="ticket-status" aria-label="Estado del ticket" hidden>
+          <option>Abierto</option>
+          <option>En proceso</option>
+          <option>Cerrado</option>
+        </select>
+      </div>
+      <div class="chat-messages" id="chat-messages"></div>
+      <form class="chat-form" id="chat-form" hidden>
+        <input id="chat-input" placeholder="Escribe una respuesta al cliente" aria-label="Respuesta" required>
+        <button type="submit" class="btn btn-primary">Enviar</button>
+      </form>
+    </div>
+  </div>
+</section>
+{% endblock %}
 
-                new Chart(ctx, {
-                    type: 'line',
-                    data: {
-                        labels: labels,
-                        datasets: [{
-                            label: 'Ingresos ($)',
-                            data: values,
-                            borderColor: '#f97316',
-                            backgroundColor: gradient,
-                            borderWidth: 3,
-                            fill: true,
-                            tension: 0.4,
-                            pointBackgroundColor: '#f97316',
-                            pointBorderColor: '#ffffff',
-                            pointBorderWidth: 2,
-                            pointRadius: 4,
-                            pointHoverRadius: 6
-                        }]
-                    },
-                    options: {
-                        responsive: true,
-                        maintainAspectRatio: false,
-                        plugins: {
-                            legend: { display: false },
-                            tooltip: {
-                                backgroundColor: '#1e1e26',
-                                titleColor: '#fff',
-                                bodyColor: '#f97316',
-                                borderColor: 'rgba(255,255,255,0.1)',
-                                borderWidth: 1,
-                                padding: 12,
-                                displayColors: false
-                            }
-                        },
-                        scales: {
-                            x: {
-                                ticks: { color: '#64748b', font: { size: 11 } },
-                                grid: { color: 'rgba(255, 255, 255, 0.03)' }
-                            },
-                            y: {
-                                ticks: { color: '#64748b', font: { size: 11 } },
-                                grid: { color: 'rgba(255, 255, 255, 0.03)' },
-                                border: { dash: [4, 4] }
-                            }
-                        }
-                    }
-                });
-            })
-            .catch(error => console.error('Error al cargar las métricas:', error));
-    </script>
-</body>
-</html>
+{% block scripts %}
+<script>
+const money = value => '$' + Number(value || 0).toLocaleString('es-CO', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+const SOLD_STATUSES = ['COMPLETED', 'PARTIALLY_REFUNDED', 'REFUNDED'];
+const STATUS_LABELS = { COMPLETED: ['Completada', 'badge-ok'], PARTIALLY_REFUNDED: ['Reembolso parcial', 'badge-warn'], REFUNDED: ['Reembolsada', 'badge-danger'] };
+const PAYMENT_LABELS = { CASH: 'Efectivo', CARD: 'Tarjeta', TRANSFER: 'Transferencia' };
+
+// ---------- Pestañas: se muestra la sección que indica el # de la URL ----------
+function showTab() {
+  const current = location.hash.slice(1) || 'resumen';
+  for (const section of document.querySelectorAll('[data-section]')) section.hidden = section.id !== current;
+  for (const link of document.querySelectorAll('[data-tab]')) link.classList.toggle('active', link.dataset.tab === current);
+}
+window.addEventListener('hashchange', showTab);
+showTab();
+
+document.getElementById('report-date').textContent =
+  `Generado el ${new Date().toLocaleString('es-CO')} por {{ request.user.username|escapejs }}`;
+
+// =========================== 1. Dashboard de ventas ===========================
+// Métricas del mes y de la semana: endpoint /api/analytics/metrics/
+fetch('/api/analytics/metrics/')
+  .then(response => { if (!response.ok) throw new Error('No se pudieron cargar las métricas.'); return response.json(); })
+  .then(data => {
+    const total = Number(data.cards_summary.ingresos_mes);
+    const count = Number(data.cards_summary.transacciones_mes);
+    document.getElementById('kpi-total').textContent = money(total);
+    document.getElementById('kpi-count').textContent = count;
+    document.getElementById('kpi-ticket').textContent = count > 0 ? money(total / count) : money(0);
+
+    const days = data.charts.line_chart_semana;
+    const tbody = document.getElementById('days-table');
+    for (const day of days) {
+      const row = tbody.insertRow();
+      row.innerHTML = `<td>${day.dia}</td><td class="num">${day.cantidad}</td><td class="num">${money(day.ingreso)}</td>`;
+    }
+    new Chart(document.getElementById('chart-days'), {
+      type: 'line',
+      data: { labels: days.map(day => day.dia.slice(5)), datasets: [{ label: 'Ingresos', data: days.map(day => Number(day.ingreso)), borderColor: '#1f7a4d', backgroundColor: '#1f7a4d' }] },
+      options: { maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { y: { beginAtZero: true } } },
+    });
+  })
+  .catch(error => { const box = document.getElementById('metrics-error'); box.textContent = error.message; box.hidden = false; });
+
+// Productos vendidos y más vendidos: se calculan con las ventas de /api/ventas/
+let allSales = [];
+fetch('/api/ventas/')
+  .then(response => response.json())
+  .then(sales => {
+    allSales = sales;
+    const soldSales = sales.filter(sale => SOLD_STATUSES.includes(sale.status));
+    const unitsByProduct = {};
+    let units = 0;
+    for (const sale of soldSales) {
+      for (const item of sale.items) {
+        units += item.quantity;
+        unitsByProduct[item.product_name] = (unitsByProduct[item.product_name] || 0) + item.quantity;
+      }
+    }
+    document.getElementById('kpi-units').textContent = units;
+
+    const top = Object.entries(unitsByProduct).sort((a, b) => b[1] - a[1]).slice(0, 5);
+    new Chart(document.getElementById('chart-products'), {
+      type: 'bar',
+      data: { labels: top.map(([name]) => name), datasets: [{ label: 'Unidades', data: top.map(([, qty]) => qty), backgroundColor: '#9a6200' }] },
+      options: { indexAxis: 'y', maintainAspectRatio: false, plugins: { legend: { display: false } } },
+    });
+    renderRefundRows();
+  });
+
+// =========================== 2. Reembolsos ===========================
+// El backend guarda reembolsos (modelo Reembolso) pero no tiene un endpoint para crearlos desde la web.
+// Por eso el botón "Registrar reembolso" solo deja la solicitud marcada en pantalla.
+const requestedRefunds = new Set();
+let selectedSale = null;
+
+function showRefundMessage(text, type) {
+  const box = document.getElementById('refund-message');
+  box.className = `message message-${type}`;
+  box.textContent = text;
+}
+
+function renderRefundRows() {
+  const text = document.getElementById('refund-search').value.trim().toUpperCase();
+  const sales = allSales.filter(sale => SOLD_STATUSES.includes(sale.status) && sale.receipt_number.includes(text));
+  const tbody = document.getElementById('refund-rows');
+  tbody.replaceChildren();
+  if (sales.length === 0) tbody.innerHTML = '<tr><td colspan="6" class="empty">No se encontraron ventas.</td></tr>';
+
+  for (const sale of sales) {
+    const [label, style] = requestedRefunds.has(sale.id) ? ['Reembolso solicitado', 'badge-warn'] : STATUS_LABELS[sale.status];
+    const units = sale.items.reduce((sum, item) => sum + item.quantity, 0);
+    const row = tbody.insertRow();
+    if (selectedSale === sale) row.className = 'selected';
+    row.innerHTML = `<td class="code"></td><td>${PAYMENT_LABELS[sale.payment_method] || '—'}</td><td class="num">${units}</td>
+                     <td class="num">${money(sale.total)}</td><td><span class="badge ${style}">${label}</span></td><td></td>`;
+    row.cells[0].textContent = sale.receipt_number;
+
+    const viewButton = document.createElement('button');
+    viewButton.type = 'button'; viewButton.className = 'btn btn-sm'; viewButton.textContent = 'Ver';
+    viewButton.onclick = () => showSaleDetail(sale);
+    const refundButton = document.createElement('button');
+    refundButton.type = 'button'; refundButton.className = 'btn btn-sm btn-danger'; refundButton.textContent = 'Reembolsar';
+    refundButton.disabled = sale.status === 'REFUNDED' || requestedRefunds.has(sale.id);
+    refundButton.onclick = () => openRefund(sale);
+    row.cells[5].append(viewButton, ' ', refundButton);
+  }
+}
+document.getElementById('refund-search').addEventListener('input', renderRefundRows);
+
+function showSaleDetail(sale) {
+  selectedSale = sale;
+  document.getElementById('refund-detail').hidden = false;
+  document.getElementById('refund-detail-title').textContent = `Detalle de ${sale.receipt_number}`;
+  const tbody = document.getElementById('refund-detail-rows');
+  tbody.replaceChildren();
+  for (const item of sale.items) {
+    const row = tbody.insertRow();
+    row.innerHTML = `<td></td><td class="num">${item.quantity}</td><td class="num">${money(item.unit_price)}</td><td class="num">${money(item.subtotal)}</td>`;
+    row.cells[0].textContent = item.product_name;
+  }
+  renderRefundRows();
+}
+
+function openRefund(sale) {
+  selectedSale = sale;
+  document.getElementById('refund-modal-title').textContent = `Reembolso de ${sale.receipt_number}`;
+  const tbody = document.getElementById('refund-items');
+  tbody.replaceChildren();
+  for (const item of sale.items) {
+    const row = tbody.insertRow();
+    row.innerHTML = `<td></td><td class="num">${item.quantity}</td><td></td>`;
+    row.cells[0].textContent = item.product_name;
+    const input = document.createElement('input');
+    input.type = 'number'; input.min = 0; input.max = item.quantity; input.value = 0; input.className = 'cart-qty';
+    input.dataset.price = Number(item.subtotal) / item.quantity;
+    input.oninput = updateRefundAmount;
+    row.cells[2].append(input);
+  }
+  document.getElementById('refund-reason').value = '';
+  updateRefundAmount();
+  document.getElementById('refund-modal').showModal();
+}
+
+function updateRefundAmount() {
+  let amount = 0;
+  for (const input of document.querySelectorAll('#refund-items input')) amount += Number(input.value) * Number(input.dataset.price);
+  document.getElementById('refund-amount').textContent = money(amount);
+}
+
+document.getElementById('refund-form').onsubmit = event => {
+  event.preventDefault();
+  const units = [...document.querySelectorAll('#refund-items input')].reduce((sum, input) => sum + Number(input.value), 0);
+  if (units === 0) { alert('Indica al menos una unidad a devolver.'); return; }
+  requestedRefunds.add(selectedSale.id);
+  document.getElementById('refund-modal').close();
+  showRefundMessage(`Reembolso de ${selectedSale.receipt_number} por ${document.getElementById('refund-amount').textContent} registrado en pantalla. `
+    + 'Vista previa: el backend todavía no tiene un endpoint de reembolsos; para guardarlo se usa el panel de Django (Reembolsos).', 'info');
+  renderRefundRows();
+};
+
+// =========================== 3. Atención al cliente ===========================
+// Datos de ejemplo en memoria (no hay modelo de tickets en el backend).
+const tickets = [
+  { id: 1, client: 'María Gómez', subject: 'Producto vencido en la compra', status: 'Abierto', priority: 'Alta', date: '2026-09-23',
+    messages: [{ fromStore: false, text: 'Compré leche ayer y venía vencida. ¿Me la pueden cambiar?' }] },
+  { id: 2, client: 'Carlos Ruiz', subject: 'Cobro doble con tarjeta', status: 'En proceso', priority: 'Alta', date: '2026-09-22',
+    messages: [{ fromStore: false, text: 'Me aparecen dos cobros de la misma compra.' },
+               { fromStore: true, text: 'Estamos revisando con el banco, le escribimos hoy.' }] },
+  { id: 3, client: 'Laura Pérez', subject: 'Consulta de disponibilidad', status: 'Cerrado', priority: 'Baja', date: '2026-09-20',
+    messages: [{ fromStore: false, text: '¿Tienen café de origen de 500 g?' },
+               { fromStore: true, text: 'Sí, ya llegó de nuevo. ¡Gracias por escribirnos!' }] },
+];
+const STATUS_STYLE = { 'Abierto': 'badge-warn', 'En proceso': 'badge-ok', 'Cerrado': 'badge-muted' };
+let currentTicket = null;
+
+function renderTickets() {
+  const filter = document.getElementById('ticket-filter').value;
+  const tbody = document.getElementById('ticket-rows');
+  tbody.replaceChildren();
+  for (const ticket of tickets.filter(t => !filter || t.status === filter)) {
+    const row = tbody.insertRow();
+    if (ticket === currentTicket) row.className = 'selected';
+    row.style.cursor = 'pointer';
+    row.innerHTML = `<td></td><td></td><td><span class="badge ${STATUS_STYLE[ticket.status]}">${ticket.status}</span></td>
+                     <td><span class="badge ${ticket.priority === 'Alta' ? 'badge-danger' : 'badge-muted'}">${ticket.priority}</span></td><td>${ticket.date}</td>`;
+    row.cells[0].textContent = ticket.client;
+    row.cells[1].textContent = ticket.subject;
+    row.onclick = () => openTicket(ticket);
+  }
+}
+
+function openTicket(ticket) {
+  currentTicket = ticket;
+  document.getElementById('chat-title').textContent = `${ticket.client}: ${ticket.subject}`;
+  document.getElementById('ticket-status').hidden = false;
+  document.getElementById('ticket-status').value = ticket.status;
+  document.getElementById('chat-form').hidden = false;
+  const box = document.getElementById('chat-messages');
+  box.replaceChildren();
+  for (const message of ticket.messages) {
+    const bubble = document.createElement('div');
+    bubble.className = message.fromStore ? 'chat-msg from-store' : 'chat-msg';
+    bubble.textContent = message.text;
+    box.append(bubble);
+  }
+  box.scrollTop = box.scrollHeight;
+  renderTickets();
+}
+
+document.getElementById('ticket-filter').onchange = renderTickets;
+document.getElementById('ticket-status').onchange = event => { currentTicket.status = event.target.value; renderTickets(); };
+document.getElementById('chat-form').onsubmit = event => {
+  event.preventDefault();
+  const input = document.getElementById('chat-input');
+  currentTicket.messages.push({ fromStore: true, text: input.value });
+  input.value = '';
+  openTicket(currentTicket);
+};
+renderTickets();
+</script>
+{% endblock %}

@@ -1,136 +1,69 @@
-<!doctype html>
+{% load static %}<!doctype html>
 <html lang="es">
-  <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>backendXYZpos - Panel de Control</title>
-    <!-- Tailwind CSS CDN -->
-    <script src="https://cdn.tailwindcss.com"></script>
-  </head>
-  <body class="bg-slate-900 text-slate-100 min-h-screen flex flex-col justify-between selection:bg-indigo-500 selection:text-white">
-    
-    <!-- Header / Navbar -->
-    <header class="border-b border-slate-800 bg-slate-900/80 backdrop-blur sticky top-0 z-50">
-      <div class="max-w-7xl mx-auto px-6 h-16 flex items-center justify-between">
-        <div class="flex items-center space-x-3">
-          <div class="bg-indigo-600 p-2 rounded-xl shadow-lg shadow-indigo-600/30">
-            <svg class="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4"></path>
-            </svg>
-          </div>
-          <span class="font-bold text-xl tracking-wide bg-gradient-to-r from-white to-slate-400 bg-clip-text text-transparent">backendXYZpos</span>
-        </div>
-        <div class="flex items-center space-x-4">
-          <button onclick="openModal('loginModal')" class="text-sm font-semibold text-slate-300 hover:text-white transition">Iniciar Sesión</button>
-          <button onclick="openModal('registerModal')" class="text-sm font-semibold bg-indigo-600 hover:bg-indigo-500 px-4 py-2 rounded-xl transition shadow-md shadow-indigo-600/20">Registrarse</button>
-        </div>
-      </div>
-    </header>
-
-    <!-- Main Content -->
-    {% if error_log or error_reg %}<p role="alert" class="text-red-300 text-center p-4">{{ error_log }} {{ error_reg }}</p>{% endif %}
-    <main class="max-w-7xl mx-auto px-6 py-16 w-full">
-      <div class="text-center max-w-3xl mx-auto space-y-6">
-        <span class="px-3.5 py-1.5 text-xs font-semibold tracking-wider text-indigo-400 uppercase bg-indigo-500/10 border border-indigo-500/20 rounded-full">
-          API & Backend Core
-        </span>
-        <h1 class="text-4xl sm:text-6xl font-extrabold tracking-tight">
-          Bienvenido a <span class="bg-gradient-to-r from-indigo-400 to-purple-400 bg-clip-text text-transparent">XYZpos</span>
-        </h1>
-        <p class="text-slate-400 text-lg leading-relaxed">
-          El núcleo del sistema de punto de venta está operando correctamente. Inicia sesión o crea una cuenta nueva para acceder al panel de control y analíticas.
-        </p>
-
-        <!-- Action Buttons -->
-        <div class="flex flex-wrap justify-center gap-4 pt-4">
-          <button onclick="openModal('loginModal')" class="px-6 py-3 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-medium transition-all shadow-lg shadow-indigo-600/20 flex items-center space-x-2">
-            <span>Acceder al Sistema</span>
-          </button>
-          <a href="/admin/" class="px-6 py-3 rounded-xl bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-300 font-medium transition-all flex items-center space-x-2">
-            <span>Panel Django Admin</span>
-          </a>
-        </div>
-      </div>
-
-      <!-- Cards Grid -->
-      <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mt-20">
-        <div class="bg-slate-800/50 border border-slate-800 p-6 rounded-2xl hover:border-slate-700 transition-all">
-          <div class="w-10 h-10 rounded-lg bg-indigo-500/10 border border-indigo-500/20 flex items-center justify-center text-indigo-400 mb-4 font-bold">01</div>
-          <h3 class="font-semibold text-lg text-white mb-2">Django Framework</h3>
-          <p class="text-slate-400 text-sm">Estructura robusta y segura corriendo sobre Python con arquitectura MTV.</p>
-        </div>
-        <div class="bg-slate-800/50 border border-slate-800 p-6 rounded-2xl hover:border-slate-700 transition-all">
-          <div class="w-10 h-10 rounded-lg bg-purple-500/10 border border-purple-500/20 flex items-center justify-center text-purple-400 mb-4 font-bold">02</div>
-          <h3 class="font-semibold text-lg text-white mb-2">API Endpoints</h3>
-          <p class="text-slate-400 text-sm">Preparado para escalar servicios REST y conectar con el frontend del POS.</p>
-        </div>
-        <div class="bg-slate-800/50 border border-slate-800 p-6 rounded-2xl hover:border-slate-700 transition-all">
-          <div class="w-10 h-10 rounded-lg bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center text-emerald-400 mb-4 font-bold">03</div>
-          <h3 class="font-semibold text-lg text-white mb-2">Base de Datos</h3>
-          <p class="text-slate-400 text-sm">ORM integrado listo para sincronizar modelos de inventario, ventas y usuarios.</p>
-        </div>
-      </div>
-    </main>
-
-    <!-- MODAL INICIAR SESIÓN -->
-    <div id="loginModal" class="hidden fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
-      <div class="bg-slate-800 border border-slate-700 p-8 rounded-2xl w-full max-w-md relative shadow-2xl">
-        <button onclick="closeModal('loginModal')" class="absolute top-4 right-4 text-slate-400 hover:text-white">&times;</button>
-        <h2 class="text-2xl font-bold mb-6 text-white">Iniciar Sesión</h2>
-        <form method="POST" class="space-y-4">
-          {% csrf_token %}
-          <input type="hidden" name="action" value="login">
-          <div>
-            <!-- Cambio 1: for="log_username" e id="log_username" -->
-            <label for="log_username" class="block text-sm text-slate-400 mb-1">Usuario</label>
-            <input type="text" id="log_username" name="log_username" required class="w-full bg-slate-900 border border-slate-700 rounded-xl px-4 py-2.5 text-white focus:outline-none focus:border-indigo-500">
-          </div>
-          <div>
-            <!-- Cambio 2: for="log_password" e id="log_password" -->
-            <label for="log_password" class="block text-sm text-slate-400 mb-1">Contraseña</label>
-            <input type="password" id="log_password" name="log_password" required class="w-full bg-slate-900 border border-slate-700 rounded-xl px-4 py-2.5 text-white focus:outline-none focus:border-indigo-500">
-          </div>
-          <button type="submit" class="w-full bg-indigo-600 hover:bg-indigo-500 text-white font-medium py-3 rounded-xl transition shadow-lg shadow-indigo-600/20">Ingresar al Dashboard</button>
-        </form>
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Ingresar - XYZpos</title>
+  <link rel="stylesheet" href="{% static 'myapp/pos.css' %}">
+</head>
+<body>
+  <div class="login-page">
+    <div class="panel">
+      <div class="panel-body">
+        <h1>XYZpos</h1>
+        <p class="muted">Sistema de punto de venta e inventario de la tienda. Ingresa con tu usuario para abrir la caja o administrar la tienda.</p>
       </div>
     </div>
 
-    <!-- MODAL REGISTRO DE USUARIO NUEVO -->
-    <div id="registerModal" class="hidden fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
-      <div class="bg-slate-800 border border-slate-700 p-8 rounded-2xl w-full max-w-md relative shadow-2xl">
-        <button onclick="closeModal('registerModal')" class="absolute top-4 right-4 text-slate-400 hover:text-white">&times;</button>
-        <h2 class="text-2xl font-bold mb-6 text-white">Crear Usuario Nuevo</h2>
-        <form method="POST" class="space-y-4">
-          {% csrf_token %}
-          <input type="hidden" name="action" value="register">
-          <div>
-            <!-- Cambio 3: for="reg_username" e id="reg_username" -->
-            <label for="reg_username" class="block text-sm text-slate-400 mb-1">Nombre de Usuario</label>
-            <input type="text" id="reg_username" name="reg_username" required class="w-full bg-slate-900 border border-slate-700 rounded-xl px-4 py-2.5 text-white focus:outline-none focus:border-indigo-500">
+    {% if user.is_authenticated %}
+    <div class="message message-info">
+      Ya iniciaste sesión como {{ user.username }}.
+      <a href="{% url 'ventas_ui' %}">Ir al punto de venta</a>
+    </div>
+    {% endif %}
+
+    <div class="forms">
+      <!-- Formulario de inicio de sesión: lo procesa HomeView (action = login) -->
+      <form method="post" class="panel">
+        {% csrf_token %}
+        <input type="hidden" name="action" value="login">
+        <div class="panel-header"><h2>Iniciar sesión</h2></div>
+        <div class="panel-body">
+          {% if error_log %}<div class="message message-error" role="alert">{{ error_log }}</div>{% endif %}
+          <div class="field">
+            <label for="log_username">Usuario</label>
+            <input type="text" id="log_username" name="log_username" required autocomplete="username">
           </div>
-          <div>
-            <!-- Cambio 4: for="reg_password" e id="reg_password" -->
-            <label for="reg_password" class="block text-sm text-slate-400 mb-1">Contraseña</label>
-            <input type="password" id="reg_password" name="reg_password" required class="w-full bg-slate-900 border border-slate-700 rounded-xl px-4 py-2.5 text-white focus:outline-none focus:border-indigo-500">
+          <div class="field">
+            <label for="log_password">Contraseña</label>
+            <input type="password" id="log_password" name="log_password" required autocomplete="current-password">
           </div>
-          <button type="submit" class="w-full bg-emerald-600 hover:bg-emerald-500 text-white font-medium py-3 rounded-xl transition shadow-lg shadow-emerald-600/20">Registrarse y Entrar</button>
-        </form>
-      </div>
+          <button type="submit" class="btn btn-primary btn-lg">Ingresar</button>
+        </div>
+      </form>
+
+      <!-- Registro de cajero nuevo: lo procesa HomeView (action = register) -->
+      <form method="post" class="panel">
+        {% csrf_token %}
+        <input type="hidden" name="action" value="register">
+        <div class="panel-header"><h2>Crear cuenta de cajero</h2></div>
+        <div class="panel-body">
+          {% if error_reg %}<div class="message message-error" role="alert">{{ error_reg }}</div>{% endif %}
+          <div class="field">
+            <label for="reg_username">Nombre de usuario</label>
+            <input type="text" id="reg_username" name="reg_username" required autocomplete="username">
+          </div>
+          <div class="field">
+            <label for="reg_password">Contraseña</label>
+            <input type="password" id="reg_password" name="reg_password" required autocomplete="new-password">
+            <div class="small muted">Mínimo 8 caracteres, que no sea una contraseña común.</div>
+          </div>
+          <button type="submit" class="btn btn-lg">Registrarme</button>
+        </div>
+      </form>
     </div>
 
-    <!-- Footer -->
-    <footer class="border-t border-slate-800 py-6 text-center text-slate-500 text-sm">
-      <p>backendXYZpos &copy; 2026 - Desarrollado para Mini-proyecto PDS</p>
-    </footer>
-
-    <!-- Script para los modales -->
-    <script>
-      function openModal(modalId) {
-        document.getElementById(modalId).classList.remove('hidden');
-      }
-      function closeModal(modalId) {
-        document.getElementById(modalId).classList.add('hidden');
-      }
-    </script>
-  </body>
+    <p class="small muted">Las cuentas nuevas se crean con rol de cajero. Los administradores se gestionan desde <a href="/admin/">el panel de Django</a>.</p>
+  </div>
+</body>
 </html>

@@ -1,0 +1,141 @@
+{% load static %}<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% block title %}XYZpos{% endblock %} - XYZpos</title>
+  <link rel="stylesheet" href="{% static 'myapp/pos.css' %}">
+  {% block head %}{% endblock %}
+</head>
+<body>
+{% comment %}
+  Plantilla base de las páginas internas.
+  - Menú lateral: muestra opciones según el rol que ya existe en el backend
+    (superusuario o perfil_pos.role == 'ADMIN' es administrador; el resto es cajero).
+  - Barra superior: título de la página y campana de alertas.
+  Cada página rellena los bloques: title, page_title, page_actions, content, alert_items y scripts.
+{% endcomment %}
+{% with pagina=request.resolver_match.url_name %}
+<div class="app">
+  <aside class="sidebar">
+    <div class="brand">
+      <strong>XYZpos</strong>
+      <span>Tienda · Punto de venta</span>
+    </div>
+
+    <nav class="menu">
+      {% if request.user.is_superuser or request.user.perfil_pos.role == 'ADMIN' %}
+        <p class="menu-title">Administración</p>
+        <a href="{% url 'dashboard_ui' %}#resumen" class="{% if pagina == 'dashboard_ui' %}active{% endif %}">Dashboard y reportes</a>
+        <a href="{% url 'inventario' %}" class="{% if pagina == 'inventario' or pagina == 'producto_crear' or pagina == 'producto_editar' %}active{% endif %}">Inventario</a>
+        <a href="{% url 'dashboard_ui' %}#reembolsos">Reembolsos</a>
+        <a href="{% url 'dashboard_ui' %}#atencion">Atención al cliente</a>
+      {% endif %}
+      <p class="menu-title">Caja</p>
+      <a href="{% url 'ventas_ui' %}" class="{% if pagina == 'ventas_ui' %}active{% endif %}">Punto de venta</a>
+      <a href="{% url 'ventas_ui' %}#borradores">Ventas en borrador</a>
+    </nav>
+
+    <div class="user-box">
+      {{ request.user.username }}
+      <span class="role">{% if request.user.is_superuser or request.user.perfil_pos.role == 'ADMIN' %}Administrador{% else %}Cajero{% endif %}</span>
+      <form method="post" action="{% url 'logout' %}">
+        {% csrf_token %}
+        <button type="submit" class="btn btn-sm">Cerrar sesión</button>
+      </form>
+    </div>
+  </aside>
+
+  <div class="main">
+    <header class="topbar">
+      <h1>{% block page_title %}{% endblock %}</h1>
+      <div class="topbar-actions">
+        {% block page_actions %}{% endblock %}
+
+        <!-- Campana de alertas -->
+        <div class="bell">
+          <button type="button" id="bell-button" class="btn" aria-expanded="false" aria-controls="alert-panel">
+            Alertas <span id="bell-count" class="bell-count" hidden>0</span>
+          </button>
+          <div id="alert-panel" class="alert-panel" hidden>
+            <div class="panel-header">
+              <h2>Alertas</h2>
+              <button type="button" id="report-emergency" class="btn btn-sm btn-danger">Reportar emergencia</button>
+            </div>
+            <ul id="alert-list">
+              {% block alert_items %}{% endblock %}
+            </ul>
+          </div>
+        </div>
+      </div>
+    </header>
+
+    <main class="content">
+      {% block content %}{% endblock %}
+    </main>
+  </div>
+</div>
+{% endwith %}
+
+<script>
+// ---------- Campana de alertas ----------
+// Fuentes de las alertas:
+// 1) Stock bajo: la página las escribe en el HTML (bloque alert_items) con los productos que ya envía el backend.
+// 2) Ventas en borrador pendientes: se cuentan con el endpoint existente /api/ventas/.
+// 3) Emergencias: las reporta el usuario y se guardan solo en este navegador (localStorage).
+const alertList = document.getElementById('alert-list');
+const bellCount = document.getElementById('bell-count');
+const alertPanel = document.getElementById('alert-panel');
+const bellButton = document.getElementById('bell-button');
+
+function addAlert(type, text) {
+  const item = document.createElement('li');
+  const badge = document.createElement('span');
+  badge.className = type === 'Emergencia' ? 'badge badge-danger' : 'badge badge-warn';
+  badge.textContent = type;
+  item.append(badge, text);
+  alertList.append(item);
+}
+
+function updateBellCount() {
+  const total = alertList.children.length;
+  bellCount.textContent = total;
+  bellCount.hidden = total === 0;
+}
+
+bellButton.onclick = () => {
+  alertPanel.hidden = !alertPanel.hidden;
+  bellButton.setAttribute('aria-expanded', String(!alertPanel.hidden));
+};
+
+// Emergencias guardadas en este navegador
+function savedEmergencies() {
+  try { return JSON.parse(localStorage.getItem('emergencias') || '[]'); } catch { return []; }
+}
+for (const text of savedEmergencies()) addAlert('Emergencia', text);
+
+document.getElementById('report-emergency').onclick = () => {
+  const text = prompt('Describe la emergencia o el problema operativo:');
+  if (!text) return;
+  const list = savedEmergencies();
+  list.push(text);
+  try { localStorage.setItem('emergencias', JSON.stringify(list)); } catch {}
+  addAlert('Emergencia', text);
+  updateBellCount();
+};
+
+// Ventas en borrador pendientes (dato real del backend)
+fetch('/api/ventas/')
+  .then(response => response.ok ? response.json() : [])
+  .then(sales => {
+    const drafts = sales.filter(sale => sale.status === 'DRAFT').length;
+    if (drafts > 0) addAlert('Venta pendiente', `${drafts} venta(s) en borrador sin finalizar`);
+  })
+  .catch(() => {})
+  .finally(updateBellCount);
+
+updateBellCount();
+</script>
+{% block scripts %}{% endblock %}
+</body>
+</html>

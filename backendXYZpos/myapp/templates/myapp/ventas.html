@@ -1,259 +1,369 @@
-<!doctype html>
-<html lang="es">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width,initial-scale=1">
-    <title>Ventas - XYZpos</title>
-    <script src="https://cdn.tailwindcss.com"></script>
-</head>
-<body class="bg-[#0f0f13] text-slate-200 min-h-screen p-4 md:p-8">
-    <header class="flex flex-wrap justify-between gap-4">
-        <h1 class="text-2xl text-orange-500 font-bold">Ventas · {{ request.user.username }}</h1>
-        <nav class="flex items-center gap-4">
-            {% if es_admin %}
-                <a href="{% url 'dashboard_ui' %}" class="hover:text-orange-400 transition-colors">Dashboard</a> · 
-                <a href="{% url 'inventario' %}" class="hover:text-orange-400 transition-colors">Inventario</a>
-            {% endif %}
-            <form method="post" action="{% url 'logout' %}" class="inline ml-2">
-                {% csrf_token %}
-                <button class="bg-red-600/80 hover:bg-red-600 text-white px-3 py-1 rounded transition-all transform active:scale-95">Salir</button>
-            </form>
-        </nav>
-    </header>
+{% extends 'myapp/base.html' %}
+{% load l10n %}
+{% comment %}
+  Punto de venta (administrador y cajero).
+  Usa la API de ventas que ya existe en el backend:
+    GET  /api/ventas/                 lista de ventas (borradores y completadas)
+    GET  /api/ventas/<id>/            detalle de una venta
+    POST /api/ventas/                 crear venta (queda en borrador y separa el stock)
+    POST /api/ventas/<id>/completar/  finalizar la venta (nueva o borrador recuperado)
+  No se usan editar (PUT) ni cancelar: en esta versión del backend fallan al registrar
+  los movimientos de inventario, por eso un borrador se recupera y se finaliza tal cual.
+{% endcomment %}
+{% block title %}Punto de venta{% endblock %}
+{% block page_title %}Punto de venta{% endblock %}
 
-    <main class="max-w-5xl mx-auto mt-8 space-y-5">
-        <p id="sale-message" role="status" class="transition-all"></p>
+{% block alert_items %}
+  {% for p in productos %}{% if p.stock_bajo %}
+    <li><span class="badge badge-warn">Stock bajo</span>{{ p.nombre }}: quedan {{ p.stock }}</li>
+  {% endif %}{% endfor %}
+{% endblock %}
 
-        <form id="sale-form" class="bg-[#1a1a22] border border-gray-800 rounded-xl p-5 space-y-4 shadow-lg">
-            {% csrf_token %}
-            <h2 id="sale-title" class="text-lg font-semibold text-orange-400">Nueva Venta</h2>
-            <p class="text-sm text-gray-400">Selecciona los productos. El inventario se descontará automáticamente.</p>
-            
-            <div id="sale-lines" class="space-y-3"></div>
+{% block content %}
+<div id="sale-message" role="status" aria-live="polite"></div>
 
-            <button type="button" id="add-line" class="text-orange-400 hover:text-orange-300 hover:underline transition-colors font-medium">+ Añadir producto</button>
-            
-            <div class="flex flex-wrap gap-4 pt-2">
-                <label class="flex flex-col text-sm text-gray-300">Pago 
-                    <select id="payment-method" name="payment_method" class="bg-slate-800 border border-gray-700 p-2 rounded mt-1 focus:outline-none focus:border-orange-500">
-                        <option value="CASH">Efectivo</option>
-                        <option value="CARD">Tarjeta</option>
-                        <option value="TRANSFER">Transferencia</option>
-                    </select>
-                </label>
-                <label class="flex flex-col text-sm text-gray-300">Recibido (opcional) 
-                    <input id="amount-received" name="amount_received" type="number" min="0" step="0.01" class="bg-slate-800 border border-gray-700 p-2 rounded mt-1 focus:outline-none focus:border-orange-500">
-                </label>
-            </div>
+<div class="pos">
+  <!-- Columna izquierda: productos disponibles -->
+  <section class="panel">
+    <div class="panel-header">
+      <h2>Productos disponibles</h2>
+      <input id="product-search" type="search" placeholder="Buscar por código o nombre" aria-label="Buscar producto">
+    </div>
+    <div class="panel-body">
+      <div class="product-grid" id="product-grid">
+        {% for p in productos %}
+        <button type="button" class="product-btn" value="{{ p.pk }}"
+                data-name="{{ p.nombre }}" data-sku="{{ p.sku }}"
+                data-price="{{ p.precio|unlocalize }}" data-stock="{{ p.stock }}"
+                {% if p.stock == 0 %}disabled{% endif %}>
+          <span class="code muted">{{ p.sku }}</span>
+          <strong>{{ p.nombre }}</strong>
+          <span class="price">${{ p.precio }}</span>
+          <span class="small muted">· {{ p.stock }} disp.</span>
+        </button>
+        {% empty %}
+        <p class="muted">No hay productos activos para vender.</p>
+        {% endfor %}
+      </div>
+    </div>
+  </section>
 
-            <div class="flex flex-wrap gap-3 pt-3">
-                <button type="submit" id="btn-instant" class="bg-green-600 hover:bg-green-500 active:bg-green-700 text-white font-medium rounded px-5 py-2.5 transition-all transform active:scale-95 shadow-md">Vender</button>
-                <button type="submit" id="btn-draft" class="bg-orange-600 hover:bg-orange-500 active:bg-orange-700 text-white font-medium rounded px-5 py-2.5 transition-all transform active:scale-95 shadow-md">Guardar borrador</button>
-                <button type="button" id="btn-reset" class="bg-slate-700 hover:bg-slate-600 active:bg-slate-800 text-gray-200 font-medium rounded px-5 py-2.5 transition-all transform active:scale-95 shadow-md">Limpiar</button>
-            </div>
-        </form>
+  <!-- Columna derecha: carrito de la venta actual -->
+  <form id="sale-form" class="panel">
+    {% csrf_token %}
+    <div class="panel-header">
+      <h2 id="sale-title">Venta nueva</h2>
+      <button type="button" id="btn-reset" class="btn btn-sm">Limpiar</button>
+    </div>
+    <div class="panel-body small muted">Cliente: Consumidor final</div>
 
-        <h2 class="text-xl font-semibold text-gray-300 pt-2">Ventas recientes y en espera</h2>
-        <div id="sale-list" class="space-y-3"></div>
-    </main>
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr><th>Producto</th><th>Cant.</th><th class="num">Precio</th><th class="num">Subtotal</th><th></th></tr>
+        </thead>
+        <tbody id="cart-rows"></tbody>
+      </table>
+    </div>
 
-    <template id="line-template">
-        <div class="flex gap-2 flex-wrap items-center bg-slate-900/50 p-3 rounded-lg border border-gray-800">
-            <!-- Añadido data-stock para validación visual rápida -->
-            <select name="producto" aria-label="Producto" class="bg-slate-800 border border-gray-700 p-2 rounded flex-1 focus:outline-none focus:border-orange-500" required>
-                {% for p in productos %}<option value="{{ p.pk }}" data-stock="{{ p.stock }}">{{ p.sku }} · {{ p.nombre }} · ${{ p.precio }} · stock {{ p.stock }}</option>{% endfor %}
-            </select>
-            <input name="cantidad" aria-label="Cantidad" class="bg-slate-800 border border-gray-700 p-2 rounded w-24 text-center focus:outline-none focus:border-orange-500" type="number" min="1" step="1" value="1" required>
-            <button type="button" class="quitar-btn text-red-400 hover:text-red-300 hover:bg-red-950/30 px-3 py-2 rounded transition-colors font-medium">Quitar</button>
+    <div class="cart-total">
+      <span>Total</span>
+      <strong id="cart-total">$0,00</strong>
+    </div>
+
+    <div class="panel-body">
+      <div class="form-grid">
+        <div class="field">
+          <label for="payment-method">Medio de pago</label>
+          <select id="payment-method">
+            <option value="CASH">Efectivo</option>
+            <option value="CARD">Tarjeta</option>
+            <option value="TRANSFER">Transferencia</option>
+          </select>
         </div>
-    </template>
+        <div class="field">
+          <label for="amount-received">Recibido (opcional)</label>
+          <input id="amount-received" type="number" min="0" step="0.01">
+        </div>
+      </div>
+      <p id="change-text" class="small muted"></p>
+      <button type="submit" id="btn-instant" class="btn btn-primary btn-lg">Finalizar venta</button>
+      <p></p>
+      <button type="submit" id="btn-draft" class="btn btn-lg">Guardar como borrador</button>
+    </div>
+  </form>
+</div>
 
-    <script>
-    let editing = null; 
-    let editingTax = '0.00';
-    const message = document.getElementById('sale-message');
-    const lines = document.getElementById('sale-lines');
-    const csrfInput = document.querySelector('#sale-form [name=csrfmiddlewaretoken]');
-    const csrf = csrfInput ? csrfInput.value : '';
+<!-- Ventas en borrador -->
+<section class="panel" id="borradores">
+  <div class="panel-header">
+    <h2>Ventas en borrador</h2>
+    <button type="button" id="refresh-sales" class="btn btn-sm">Actualizar</button>
+  </div>
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr><th>N.º de venta</th><th>Fecha</th><th>Cliente</th><th class="num">Total</th><th>Estado</th><th>Acciones</th></tr>
+      </thead>
+      <tbody id="draft-rows"><tr><td colspan="6" class="empty">Cargando…</td></tr></tbody>
+    </table>
+  </div>
+</section>
 
-    function showMsg(text, isError=false) {
-        message.textContent = text;
-        message.className = isError 
-            ? "text-red-400 font-bold whitespace-pre-line p-3 bg-red-900/20 border border-red-500/30 rounded-lg" 
-            : "text-green-400 font-bold whitespace-pre-line p-3 bg-green-900/20 border border-green-500/30 rounded-lg";
+<!-- Últimas ventas -->
+<section class="panel">
+  <div class="panel-header"><h2>Últimas ventas</h2></div>
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr><th>N.º de venta</th><th>Medio de pago</th><th class="num">Unidades</th><th class="num">Total</th><th>Estado</th></tr>
+      </thead>
+      <tbody id="sale-rows"><tr><td colspan="5" class="empty">Cargando…</td></tr></tbody>
+    </table>
+  </div>
+</section>
+{% endblock %}
+
+{% block scripts %}
+<script>
+// ---------- Datos de la venta actual ----------
+let cart = [];            // [{ product, name, price, stock, quantity, discount }]
+let editingId = null;     // id del borrador que se está continuando (null = venta nueva)
+let editingTax = '0.00';  // impuesto del borrador (solo lo pone un administrador)
+
+const csrf = document.querySelector('#sale-form [name=csrfmiddlewaretoken]').value;
+const messageBox = document.getElementById('sale-message');
+const amountReceived = document.getElementById('amount-received');
+
+const STATUS_LABELS = {
+  DRAFT: ['Borrador', 'badge-warn'], COMPLETED: ['Completada', 'badge-ok'], CANCELLED: ['Cancelada', 'badge-muted'],
+  PARTIALLY_REFUNDED: ['Reembolso parcial', 'badge-danger'], REFUNDED: ['Reembolsada', 'badge-danger'],
+};
+const PAYMENT_LABELS = { CASH: 'Efectivo', CARD: 'Tarjeta', TRANSFER: 'Transferencia' };
+const money = value => '$' + Number(value || 0).toLocaleString('es-CO', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
+function showMessage(text, type) {
+  messageBox.className = `message message-${type}`;
+  messageBox.textContent = text;
+}
+
+// Llama a la API de ventas y devuelve el JSON; si hay error, lanza el mensaje del backend
+async function api(path, method = 'GET', data) {
+  const response = await fetch(`/api/ventas/${path}`, {
+    method,
+    headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrf },
+    body: data === undefined ? undefined : JSON.stringify(data),
+  });
+  let result;
+  try { result = await response.json(); } catch { throw new Error(`Error del servidor (${response.status}).`); }
+  if (!response.ok) {
+    const texts = Object.values(result).flat().map(value => typeof value === 'string' ? value : JSON.stringify(value));
+    throw new Error(result.detail || texts.join(' ') || 'Error en la venta.');
+  }
+  return result;
+}
+
+// ---------- Búsqueda rápida de productos ----------
+document.getElementById('product-search').addEventListener('input', event => {
+  const text = event.target.value.toLowerCase();
+  for (const button of document.querySelectorAll('.product-btn')) {
+    const label = `${button.dataset.sku} ${button.dataset.name}`.toLowerCase();
+    button.hidden = !label.includes(text);
+  }
+});
+
+// ---------- Carrito ----------
+for (const button of document.querySelectorAll('.product-btn')) {
+  button.onclick = () => {
+    if (editingId) {
+      showMessage('El borrador se finaliza tal como fue guardado. Pulsa "Limpiar" para empezar una venta nueva.', 'info');
+      return;
     }
-
-    async function api(path, method='GET', data) { 
-        const url = `/api/ventas/${path}`;
-        const response = await fetch(url, {
-            method, 
-            headers: {'Content-Type':'application/json', 'X-CSRFToken': csrf}, 
-            body: data === undefined ? undefined : JSON.stringify(data)
-        }); 
-        
-        const text = await response.text();
-        let result;
-        try {
-            result = JSON.parse(text);
-        } catch(e) {
-            throw new Error(`Fallo crítico del servidor (Error ${response.status}). Mira la consola.`);
-        }
-
-        if (!response.ok) { 
-            throw new Error(result.detail || JSON.stringify(result)); 
-        } 
-        return result; 
+    const line = cart.find(item => item.product === Number(button.value));
+    if (line) {
+      line.quantity++;
+    } else {
+      cart.push({
+        product: Number(button.value), name: button.dataset.name,
+        price: Number(button.dataset.price), stock: Number(button.dataset.stock),
+        quantity: 1, discount: '0.00',
+      });
     }
+    renderCart();
+  };
+}
 
-    function addLine(item) { 
-        const template = document.getElementById('line-template');
-        const row = template.content.firstElementChild.cloneNode(true); 
-        row.dataset.discount = item?.discount ?? '0.00';
-        if (item) { 
-            row.querySelector('select').value = item.product; 
-            row.querySelector('input').value = item.quantity; 
-        } 
-        row.querySelector('.quitar-btn').onclick = () => row.remove(); 
-        lines.append(row); 
+function cartTotal() {
+  let total = Number(editingTax);
+  for (const item of cart) total += item.price * item.quantity - Number(item.discount);
+  return total;
+}
+
+function renderCart() {
+  const tbody = document.getElementById('cart-rows');
+  tbody.replaceChildren();
+  if (cart.length === 0) {
+    tbody.innerHTML = '<tr><td colspan="5" class="empty">Selecciona productos para agregarlos.</td></tr>';
+  }
+  for (const item of cart) {
+    const row = tbody.insertRow();
+    row.insertCell().textContent = item.name;
+
+    const quantityInput = document.createElement('input');
+    quantityInput.type = 'number'; quantityInput.min = 1; quantityInput.value = item.quantity;
+    quantityInput.className = 'cart-qty';
+    quantityInput.setAttribute('aria-label', `Cantidad de ${item.name}`);
+    quantityInput.disabled = editingId !== null; // un borrador recuperado no se modifica
+    quantityInput.onchange = () => { item.quantity = Math.max(1, Number(quantityInput.value) || 1); renderCart(); };
+    row.insertCell().append(quantityInput);
+
+    const priceCell = row.insertCell(); priceCell.className = 'num'; priceCell.textContent = money(item.price);
+    const subtotalCell = row.insertCell(); subtotalCell.className = 'num';
+    subtotalCell.textContent = money(item.price * item.quantity - Number(item.discount));
+
+    const removeButton = document.createElement('button');
+    removeButton.type = 'button'; removeButton.className = 'btn btn-sm btn-danger'; removeButton.textContent = 'Quitar';
+    removeButton.onclick = () => { cart = cart.filter(other => other !== item); renderCart(); };
+    removeButton.hidden = editingId !== null;
+    row.insertCell().append(removeButton);
+  }
+  document.getElementById('cart-total').textContent = money(cartTotal());
+  updateChange();
+}
+
+function updateChange() {
+  const received = amountReceived.value;
+  const total = cartTotal();
+  document.getElementById('change-text').textContent =
+    received === '' ? '' : Number(received) >= total ? `Cambio: ${money(received - total)}` : `Faltan ${money(total - received)}`;
+}
+amountReceived.addEventListener('input', updateChange);
+
+function resetSale(keepMessage = false) {
+  cart = []; editingId = null; editingTax = '0.00';
+  amountReceived.value = '';
+  document.getElementById('payment-method').value = 'CASH';
+  document.getElementById('sale-title').textContent = 'Venta nueva';
+  lockPaymentFields(false);
+  if (!keepMessage) { messageBox.textContent = ''; messageBox.className = ''; }
+  renderCart();
+}
+document.getElementById('btn-reset').onclick = () => resetSale();
+
+function lockPaymentFields(locked) {
+  document.getElementById('payment-method').disabled = locked;
+  amountReceived.disabled = locked;
+  document.getElementById('btn-draft').disabled = locked;
+}
+
+// ---------- Finalizar venta o guardar borrador ----------
+document.getElementById('sale-form').onsubmit = async event => {
+  event.preventDefault();
+  const button = event.submitter || document.getElementById('btn-instant');
+  const finishNow = button.id === 'btn-instant';
+  button.disabled = true;
+  try {
+    // Borrador recuperado: se finaliza directamente con el endpoint "completar".
+    // (En esta versión del backend, editar un borrador con PUT falla, así que no se modifica.)
+    if (editingId) {
+      const sale = await api(`${editingId}/completar/`, 'POST', {});
+      resetSale(true);
+      showMessage(`Venta ${sale.receipt_number} finalizada. Total ${money(sale.total)} · Cambio ${money(sale.change_amount)}`, 'ok');
+      await loadSales();
+      return;
     }
-
-    document.getElementById('add-line').onclick = () => addLine();
-
-    function reset(keepMessage = false) { 
-        editing = null; 
-        editingTax = '0.00';
-        lines.replaceChildren(); 
-        addLine(); 
-        document.getElementById('sale-title').textContent = 'Nueva Venta'; 
-        document.getElementById('amount-received').value = ''; 
-        document.getElementById('payment-method').value = 'CASH';
-        
-        if (!keepMessage) {
-            message.textContent = '';
-            message.className = '';
-        }
+    if (cart.length === 0) throw new Error('Agrega al menos un producto.');
+    for (const item of cart) {
+      if (item.quantity > item.stock) throw new Error(`Stock insuficiente para ${item.name}. Disponible: ${item.stock}`);
     }
-
-    // Botón de limpiar no hace submit, solo resetea el formulario
-    document.getElementById('btn-reset').onclick = () => reset(false);
-
-    async function refresh() { 
-        const sales = await api(''); 
-        const list = document.getElementById('sale-list'); 
-        list.replaceChildren(); 
-        for (const sale of sales) { 
-            const card = document.createElement('article'); 
-            card.className = 'bg-slate-800/80 border border-gray-700/50 rounded-lg p-4 shadow flex flex-wrap justify-between items-center'; 
-            
-            const text = document.createElement('p'); 
-            text.className = 'font-medium';
-            text.textContent = `${sale.receipt_number} · ${sale.status} · ${sale.status === 'DRAFT' ? 'Total pendiente' : '$'+sale.total}`; 
-            card.append(text); 
-            
-            const actionsDiv = document.createElement('div');
-            if (sale.status === 'DRAFT') { 
-                for (const [label, action] of [['Recuperar','edit'],['Confirmar','completar'],['Cancelar','cancelar']]) { 
-                    const button = document.createElement('button'); 
-                    button.type = 'button'; 
-                    button.className = 'ml-4 mt-2 sm:mt-0 text-orange-400 hover:text-orange-300 hover:underline transition-colors font-medium text-sm'; 
-                    button.textContent = label; 
-                    button.onclick = async () => { 
-                        button.disabled = true; 
-                        try { 
-                            if (action === 'edit') { 
-                                const draft = await api(`${sale.id}/`); 
-                                editing = draft.id; 
-                                editingTax = draft.tax;
-                                lines.replaceChildren(); 
-                                draft.items.forEach(addLine); 
-                                document.getElementById('sale-title').textContent = `Editar ${draft.receipt_number}`; 
-                                document.getElementById('payment-method').value = draft.payment_method; 
-                                document.getElementById('amount-received').value = draft.amount_received ?? ''; 
-                                showMsg(`Recuperaste el borrador ${draft.receipt_number} para editarlo.`);
-                            } else { 
-                                const result = await api(`${sale.id}/${action}/`, 'POST', {}); 
-                                if (editing === sale.id) reset(true);
-                                showMsg(`${result.status} · Total $${result.total} · Cambio $${result.change_amount ?? '0'}`); 
-                                await refresh(); 
-                            } 
-                        } catch(error) { 
-                            showMsg(error.message, true); 
-                        } finally { 
-                            button.disabled = false; 
-                        } 
-                    }; 
-                    actionsDiv.append(button); 
-                } 
-            } 
-            card.append(actionsDiv);
-            list.append(card); 
-        } 
-    }
-
-    document.getElementById('sale-form').onsubmit = async event => { 
-        event.preventDefault(); 
-        
-        // Determinar qué botón activó el submit
-        const submitter = event.submitter;
-        const isInstantSale = submitter.id === 'btn-instant';
-
-        submitter.disabled = true; 
-        const originalText = submitter.textContent;
-        submitter.textContent = "Procesando...";
-
-        try { 
-            const items = [...lines.children].map(row => {
-                const select = row.querySelector('select');
-                const option = select.options[select.selectedIndex];
-                const qty = Number(row.querySelector('input').value);
-                const stock = Number(option.dataset.stock);
-
-                // Validación rápida en el frontend para evitar peticiones innecesarias
-                if (!editing && qty > stock) {
-                    throw new Error(`Stock insuficiente para ${option.text.split('·')[1].trim()}. Disponible: ${stock}`);
-                }
-
-                return {
-                    product: Number(select.value),
-                    quantity: qty,
-                    discount: row.dataset.discount
-                };
-            }); 
-
-            if (items.length === 0) throw new Error("Añade al menos un producto.");
-
-            const data = {
-                items,
-                tax: editingTax,
-                payment_method: document.getElementById('payment-method').value,
-                amount_received: document.getElementById('amount-received').value || null
-            };
-
-            // 1. Siempre guardamos el borrador primero (aquí tu models.py ahora descuenta el stock)
-            let result = await api(editing ? `${editing}/` : '', editing ? 'PUT' : 'POST', data); 
-            
-            // 2. Si el botón fue "Vender al instante", completamos la venta automáticamente
-            if (isInstantSale) {
-                result = await api(`${result.id}/completar/`, 'POST', {});
-                reset(true); 
-                showMsg(`Venta completada. Total $${result.total} · Cambio $${result.change_amount ?? '0'}`);
-            } else {
-                // Si fue solo "Guardar borrador"
-                reset(true); 
-                showMsg(`Borrador ${result.receipt_number} guardado. Inventario separado exitosamente.`);
-            }
-
-            await refresh(); 
-        } catch(error) { 
-            showMsg(error.message, true); 
-        } finally { 
-            submitter.disabled = false; 
-            submitter.textContent = originalText;
-        } 
+    const data = {
+      items: cart.map(item => ({ product: item.product, quantity: item.quantity, discount: item.discount })),
+      tax: editingTax,
+      payment_method: document.getElementById('payment-method').value,
+      amount_received: amountReceived.value || null,
     };
+    // 1. Se crea la venta: el backend la guarda como borrador y separa el stock
+    let sale = await api('', 'POST', data);
+    // 2. Si se pulsó "Finalizar venta", se completa
+    if (finishNow) {
+      sale = await api(`${sale.id}/completar/`, 'POST', {});
+      resetSale(true);
+      showMessage(`Venta ${sale.receipt_number} finalizada. Total ${money(sale.total)} · Cambio ${money(sale.change_amount)}`, 'ok');
+    } else {
+      resetSale(true);
+      showMessage(`Borrador ${sale.receipt_number} guardado. Puedes continuarlo desde "Ventas en borrador".`, 'info');
+    }
+    await loadSales();
+  } catch (error) {
+    showMessage(error.message, 'error');
+  } finally {
+    button.disabled = false;
+  }
+};
 
-    reset(); 
-    refresh().catch(error => { showMsg(error.message, true); });
-    </script>
-</body>
-</html>
+// ---------- Borradores y últimas ventas ----------
+async function continueDraft(id) {
+  const draft = await api(`${id}/`);
+  editingId = draft.id;
+  editingTax = draft.tax;
+  cart = draft.items.map(item => ({
+    product: item.product, name: item.product_name, price: Number(item.unit_price),
+    stock: item.quantity, quantity: item.quantity, discount: item.discount,
+  }));
+  document.getElementById('payment-method').value = draft.payment_method || 'CASH';
+  amountReceived.value = draft.amount_received ?? '';
+  document.getElementById('sale-title').textContent = `Continuando ${draft.receipt_number}`;
+  lockPaymentFields(true);
+  renderCart();
+  showMessage(`Borrador ${draft.receipt_number} cargado. Revisa el carrito y pulsa "Finalizar venta".`, 'info');
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+
+function statusBadge(status) {
+  const [label, style] = STATUS_LABELS[status] || [status, 'badge-muted'];
+  return `<span class="badge ${style}">${label}</span>`;
+}
+
+function smallButton(text, onClick, extraClass = '') {
+  const button = document.createElement('button');
+  button.type = 'button'; button.className = `btn btn-sm ${extraClass}`; button.textContent = text;
+  button.onclick = async () => {
+    button.disabled = true;
+    try { await onClick(); } catch (error) { showMessage(error.message, 'error'); } finally { button.disabled = false; }
+  };
+  return button;
+}
+
+async function loadSales() {
+  const sales = await api('');
+  const drafts = sales.filter(sale => sale.status === 'DRAFT');
+  const others = sales.filter(sale => sale.status !== 'DRAFT').slice(0, 10);
+
+  const draftRows = document.getElementById('draft-rows');
+  draftRows.replaceChildren();
+  if (drafts.length === 0) draftRows.innerHTML = '<tr><td colspan="6" class="empty">No hay ventas en borrador.</td></tr>';
+  for (const sale of drafts) {
+    // El total de un borrador se calcula con sus líneas (el backend lo fija al finalizar)
+    const total = sale.items.reduce((sum, item) => sum + Number(item.subtotal), 0) + Number(sale.tax);
+    const row = draftRows.insertRow();
+    row.innerHTML = `<td class="code"></td><td class="muted">—</td><td>Consumidor final</td><td class="num">${money(total)}</td><td>${statusBadge(sale.status)}</td><td></td>`;
+    row.cells[0].textContent = sale.receipt_number;
+    row.cells[5].append(smallButton('Continuar venta', () => continueDraft(sale.id), 'btn-primary'));
+  }
+
+  const saleRows = document.getElementById('sale-rows');
+  saleRows.replaceChildren();
+  if (others.length === 0) saleRows.innerHTML = '<tr><td colspan="5" class="empty">Aún no hay ventas finalizadas.</td></tr>';
+  for (const sale of others) {
+    const units = sale.items.reduce((sum, item) => sum + item.quantity, 0);
+    const row = saleRows.insertRow();
+    row.innerHTML = `<td class="code"></td><td>${PAYMENT_LABELS[sale.payment_method] || '—'}</td><td class="num">${units}</td><td class="num">${money(sale.total)}</td><td>${statusBadge(sale.status)}</td>`;
+    row.cells[0].textContent = sale.receipt_number;
+  }
+}
+document.getElementById('refresh-sales').onclick = () => loadSales().catch(error => showMessage(error.message, 'error'));
+
+resetSale();
+loadSales().catch(error => showMessage(error.message, 'error'));
+</script>
+{% endblock %}
