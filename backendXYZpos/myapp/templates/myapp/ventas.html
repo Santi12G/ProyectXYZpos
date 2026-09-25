@@ -55,7 +55,6 @@
       <h2 id="sale-title">Venta nueva</h2>
       <button type="button" id="btn-reset" class="btn btn-sm">Limpiar</button>
     </div>
-    <div class="panel-body small muted">Cliente: Consumidor final</div>
 
     <div class="table-wrap">
       <table>
@@ -103,9 +102,9 @@
   <div class="table-wrap">
     <table>
       <thead>
-        <tr><th>N.º de venta</th><th>Fecha</th><th>Cliente</th><th class="num">Total</th><th>Estado</th><th>Acciones</th></tr>
+        <tr><th>N.º de venta</th><th class="num">Total</th><th>Estado</th><th>Acciones</th></tr>
       </thead>
-      <tbody id="draft-rows"><tr><td colspan="6" class="empty">Cargando…</td></tr></tbody>
+      <tbody id="draft-rows"><tr><td colspan="4" class="empty">Cargando…</td></tr></tbody>
     </table>
   </div>
 </section>
@@ -341,14 +340,14 @@ async function loadSales() {
 
   const draftRows = document.getElementById('draft-rows');
   draftRows.replaceChildren();
-  if (drafts.length === 0) draftRows.innerHTML = '<tr><td colspan="6" class="empty">No hay ventas en borrador.</td></tr>';
+  if (drafts.length === 0) draftRows.innerHTML = '<tr><td colspan="4" class="empty">No hay ventas en borrador.</td></tr>';
   for (const sale of drafts) {
     // El total de un borrador se calcula con sus líneas (el backend lo fija al finalizar)
     const total = sale.items.reduce((sum, item) => sum + Number(item.subtotal), 0) + Number(sale.tax);
     const row = draftRows.insertRow();
-    row.innerHTML = `<td class="code"></td><td class="muted">—</td><td>Consumidor final</td><td class="num">${money(total)}</td><td>${statusBadge(sale.status)}</td><td></td>`;
+    row.innerHTML = `<td class="code"></td><td class="num">${money(total)}</td><td>${statusBadge(sale.status)}</td><td></td>`;
     row.cells[0].textContent = sale.receipt_number;
-    row.cells[5].append(smallButton('Continuar venta', () => continueDraft(sale.id), 'btn-primary'));
+    row.cells[3].append(smallButton('Continuar venta', () => continueDraft(sale.id), 'btn-primary'));
   }
 
   const saleRows = document.getElementById('sale-rows');
