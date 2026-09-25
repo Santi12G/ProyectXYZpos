@@ -7,8 +7,9 @@
     GET  /api/ventas/<id>/            detalle de una venta
     POST /api/ventas/                 crear venta (queda en borrador y separa el stock)
     POST /api/ventas/<id>/completar/  finalizar la venta (nueva o borrador recuperado)
-  No se usan editar (PUT) ni cancelar: en esta versión del backend fallan al registrar
-  los movimientos de inventario, por eso un borrador se recupera y se finaliza tal cual.
+    POST /api/ventas/<id>/cancelar/   eliminar un borrador (queda cancelado y devuelve el stock)
+  No se usa editar (PUT): en esta versión del backend falla al registrar los movimientos
+  de inventario, por eso un borrador se recupera y se finaliza tal cual.
 {% endcomment %}
 {% block title %}Punto de venta{% endblock %}
 {% block page_title %}Punto de venta{% endblock %}
@@ -318,6 +319,15 @@ async function continueDraft(id) {
   window.scrollTo({ top: 0, behavior: 'smooth' });
 }
 
+// Eliminar borrador: el backend lo marca como cancelado y devuelve el stock reservado
+async function deleteDraft(sale) {
+  if (!confirm(`¿Eliminar el borrador ${sale.receipt_number}? Los productos vuelven al inventario.`)) return;
+  await api(`${sale.id}/cancelar/`, 'POST', {});
+  if (editingId === sale.id) resetSale(true);
+  showMessage(`Borrador ${sale.receipt_number} eliminado. El stock volvió al inventario.`, 'info');
+  await loadSales();
+}
+
 function statusBadge(status) {
   const [label, style] = STATUS_LABELS[status] || [status, 'badge-muted'];
   return `<span class="badge ${style}">${label}</span>`;
@@ -347,7 +357,11 @@ async function loadSales() {
     const row = draftRows.insertRow();
     row.innerHTML = `<td class="code"></td><td class="num">${money(total)}</td><td>${statusBadge(sale.status)}</td><td></td>`;
     row.cells[0].textContent = sale.receipt_number;
-    row.cells[3].append(smallButton('Continuar venta', () => continueDraft(sale.id), 'btn-primary'));
+    row.cells[3].append(
+      smallButton('Continuar venta', () => continueDraft(sale.id), 'btn-primary'),
+      ' ',
+      smallButton('Eliminar', () => deleteDraft(sale), 'btn-danger'),
+    );
   }
 
   const saleRows = document.getElementById('sale-rows');
