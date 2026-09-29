@@ -313,7 +313,18 @@ class Venta(ModeloProtegido):
         if venta.status != self.Estado.DRAFT:
             raise ValidationError('Una venta completada debe procesarse mediante un reembolso.')
             
+<<<<<<< HEAD
         # Como el borrador no restó inventario, cancelar simplemente anula la venta. No hay que sumar nada.
+=======
+        # Liberar el inventario reservado por el borrador.
+        # Se registra como "ajuste de entrada": un movimiento SALE solo puede ser negativo
+        # y ya existe uno por producto en esta venta (el de la reserva).
+        for item in venta.items.all():
+            producto = Producto.objects.select_for_update().get(pk=item.product_id)
+            _registrar_stock(producto, item.quantity, 'ADJUSTMENT_IN', user or venta.seller,
+                             motivo=f'Cancelación del borrador {venta.receipt_number}')
+            
+>>>>>>> 8a4c7bb4ab8dde42f1a9ff775e17094d54296ddb
         venta.status = self.Estado.CANCELLED
         _guardar_validado(venta)
         self.refresh_from_db()

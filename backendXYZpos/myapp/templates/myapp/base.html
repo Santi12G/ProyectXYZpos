@@ -26,10 +26,8 @@
     <nav class="menu">
       {% if request.user.is_superuser or request.user.perfil_pos.role == 'ADMIN' %}
         <p class="menu-title">Administración</p>
-        <a href="{% url 'dashboard_ui' %}#resumen" class="{% if pagina == 'dashboard_ui' %}active{% endif %}">Dashboard y reportes</a>
+        <a href="{% url 'dashboard_ui' %}" class="{% if pagina == 'dashboard_ui' %}active{% endif %}">Dashboard y reportes</a>
         <a href="{% url 'inventario' %}" class="{% if pagina == 'inventario' or pagina == 'producto_crear' or pagina == 'producto_editar' %}active{% endif %}">Inventario</a>
-        <a href="{% url 'dashboard_ui' %}#reembolsos">Reembolsos</a>
-        <a href="{% url 'dashboard_ui' %}#atencion">Atención al cliente</a>
       {% endif %}
       <p class="menu-title">Caja</p>
       <a href="{% url 'ventas_ui' %}" class="{% if pagina == 'ventas_ui' %}active{% endif %}">Punto de venta</a>
@@ -58,10 +56,7 @@
             Alertas <span id="bell-count" class="bell-count" hidden>0</span>
           </button>
           <div id="alert-panel" class="alert-panel" hidden>
-            <div class="panel-header">
-              <h2>Alertas</h2>
-              <button type="button" id="report-emergency" class="btn btn-sm btn-danger">Reportar emergencia</button>
-            </div>
+            <div class="panel-header"><h2>Alertas</h2></div>
             <ul id="alert-list">
               {% block alert_items %}{% endblock %}
             </ul>
@@ -82,7 +77,6 @@
 // Fuentes de las alertas:
 // 1) Stock bajo: la página las escribe en el HTML (bloque alert_items) con los productos que ya envía el backend.
 // 2) Ventas en borrador pendientes: se cuentan con el endpoint existente /api/ventas/.
-// 3) Emergencias: las reporta el usuario y se guardan solo en este navegador (localStorage).
 const alertList = document.getElementById('alert-list');
 const bellCount = document.getElementById('bell-count');
 const alertPanel = document.getElementById('alert-panel');
@@ -91,7 +85,7 @@ const bellButton = document.getElementById('bell-button');
 function addAlert(type, text) {
   const item = document.createElement('li');
   const badge = document.createElement('span');
-  badge.className = type === 'Emergencia' ? 'badge badge-danger' : 'badge badge-warn';
+  badge.className = 'badge badge-warn';
   badge.textContent = type;
   item.append(badge, text);
   alertList.append(item);
@@ -106,22 +100,6 @@ function updateBellCount() {
 bellButton.onclick = () => {
   alertPanel.hidden = !alertPanel.hidden;
   bellButton.setAttribute('aria-expanded', String(!alertPanel.hidden));
-};
-
-// Emergencias guardadas en este navegador
-function savedEmergencies() {
-  try { return JSON.parse(localStorage.getItem('emergencias') || '[]'); } catch { return []; }
-}
-for (const text of savedEmergencies()) addAlert('Emergencia', text);
-
-document.getElementById('report-emergency').onclick = () => {
-  const text = prompt('Describe la emergencia o el problema operativo:');
-  if (!text) return;
-  const list = savedEmergencies();
-  list.push(text);
-  try { localStorage.setItem('emergencias', JSON.stringify(list)); } catch {}
-  addAlert('Emergencia', text);
-  updateBellCount();
 };
 
 // Ventas en borrador pendientes (dato real del backend)
