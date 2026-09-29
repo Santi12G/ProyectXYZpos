@@ -21,7 +21,7 @@ from .models import PerfilUsuario, Producto, Venta
 from .permissions import EsAdministrador, admin_requerido, es_admin, exigir_usuario, rol_usuario
 from .reports import ESTADOS_VENDIDOS, montos_json, resumen_periodo
 
-
+# figueroa
 
 # 1. API para las métricas del Dashboard (Se mantiene igual de funcional)
 class DashboardAnalyticsViewSet(ViewSet):

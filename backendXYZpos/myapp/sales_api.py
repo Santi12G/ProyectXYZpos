@@ -11,6 +11,7 @@ from .models import ItemVenta, Producto, Venta
 from .permissions import EsUsuarioPOS, es_admin
 from .reports import montos_json
 
+# grande
 
 class LineaEntrada(serializers.Serializer):
     product = serializers.PrimaryKeyRelatedField(queryset=Producto.objects.filter(disponible=True))
